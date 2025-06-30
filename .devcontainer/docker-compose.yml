@@ -1,78 +1,20 @@
-version: "3.9"
-
 services:
-  # -----------------------------------------------------------------------
-  # 1) Application container  (web UI + Jupyter)
-  # -----------------------------------------------------------------------
   app:
-    # Build from the same Dockerfile you used for VS Code dev-container
     build:
       context: .
       dockerfile: .devcontainer/Dockerfile
     container_name: rail-scheduler-app
-    depends_on:
-      - postgres
-    environment:
-      DAGSTER_HOME: /workspace/.dagster
-      DAGSTER_POSTGRES_HOSTNAME: postgres
-      DAGSTER_POSTGRES_PORT: 5432
-      DAGSTER_POSTGRES_DB: dagster
-      DAGSTER_POSTGRES_USER: dagster
-      DAGSTER_POSTGRES_PASSWORD: dagster
-    volumes:
-      - ./:/workspace            # mount source code
-      - dagster_home:/workspace/.dagster   # persist Dagster storage
-    ports:
-      - "3000:3000"    # Dagster Web UI
-      - "8888:8888"    # JupyterLab
-    command: >
-      bash -c "
-        # launch Dagster webserver
-        dagster webserver -h 0.0.0.0 -p 3000 -m pipeline.assets &
-        # launch JupyterLab
-        jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --NotebookApp.token='' --NotebookApp.password='' &
-        tail -f /dev/null
-      "
-
-  # -----------------------------------------------------------------------
-  # 2) Dagster daemon  (schedules / sensors)
-  # -----------------------------------------------------------------------
-  daemon:
-    image: rail-scheduler-app   # reuse the built image
-    container_name: rail-scheduler-daemon
-    depends_on:
-      - postgres
-    environment:
-      DAGSTER_HOME: /workspace/.dagster
-      DAGSTER_POSTGRES_HOSTNAME: postgres
-      DAGSTER_POSTGRES_PORT: 5432
-      DAGSTER_POSTGRES_DB: dagster
-      DAGSTER_POSTGRES_USER: dagster
-      DAGSTER_POSTGRES_PASSWORD: dagster
     volumes:
       - ./:/workspace
       - dagster_home:/workspace/.dagster
-    command: dagster-daemon run
-
-  # -----------------------------------------------------------------------
-  # 3) PostgreSQL  (shared asset & run storage)
-  # -----------------------------------------------------------------------
-  postgres:
-    image: postgres:15-alpine
-    container_name: rail-scheduler-postgres
-    restart: always
     environment:
-      POSTGRES_DB: dagster
-      POSTGRES_USER: dagster
-      POSTGRES_PASSWORD: dagster
-    volumes:
-      - pgdata:/var/lib/postgresql/data
+      DAGSTER_HOME: /workspace/.dagster
     ports:
-      - "5432:5432"
-
-# -------------------------------------------------------------------------
-# Named volumes keep data between container rebuilds
-# -------------------------------------------------------------------------
-volumes:
-  pgdata:
-  dagster_home:
+      - "3000:3000"      # Dagster Web UI
+    command: >
+      bash -c "
+        # 1) one-shot materialisation (will overwrite JSON / outputs)
+        dagster asset materialize -m pipeline &&
+        # 2) then keep Dagster Web UI running
+        dagster webserver -h 0.0.0.0 -p 3000 -m pipeline
+      "

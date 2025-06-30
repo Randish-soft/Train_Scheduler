@@ -1,32 +1,36 @@
+// .devcontainer/devcontainer.json  (minimal, copy-paste)
+
+// --------------------------------------------------------------------------
+// 1) keep the default workspace folder VS Code provides
+// --------------------------------------------------------------------------
 {
-    "name": "Rail-Scheduler",
-    "image": "rail-scheduler:latest",
-    "context": "..",
-    "dockerFile": "Dockerfile",
-  
-    // Mount the whole repo
-    "workspaceFolder": "/workspace",
-  
-    // VS Code extensions inside the container
-    "customizations": {
-      "vscode": {
-        "extensions": [
-          "ms-python.python",
-          "ms-toolsai.jupyter",
-          "iredelmeier.dagster-extension"
-        ]
-      }
-    },
-  
-    // Forward UI ports (web) -> host
-    "forwardPorts": [3000, 8888],
-  
-    // Start Dagster & Jupyter automatically
-    "postCreateCommand": "dagster dev -m pipeline.assets & jupyter lab --ip 0.0.0.0 --port 8888 --no-browser &",
-  
-    // Settings overrides for container workspace
-    "settings": {
-      "python.defaultInterpreterPath": "/usr/local/bin/python"
+  "name": "Rail-Scheduler",
+  "image": "rail-scheduler:latest",
+  "context": "..",
+  "dockerFile": "Dockerfile",
+
+  // <-- remove the custom workspaceFolder so VS Code uses
+  //     /workspaces/${localWorkspaceFolderBasename} automatically
+  // "workspaceFolder": "/workspace",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "iredelmeier.dagster-extension"
+      ]
     }
+  },
+
+  "forwardPorts": [3000],
+
+  // ----------------------------------------------------------------------
+  // 2) run the pipeline once, then start Dagster UI
+  //    wrap BOTH commands in a single Bash invocation
+  // ----------------------------------------------------------------------
+  "postStartCommand": "/bin/bash -c \"dagster asset materialize -m pipeline && dagster dev -m pipeline -h 0.0.0.0 -p 3000 &\"",
+
+  "settings": {
+    "python.defaultInterpreterPath": "/usr/local/bin/python"
   }
-  
+}
