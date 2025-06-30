@@ -19,29 +19,22 @@ def canonical_data(raw_csv) -> Output[dict]:
         metadata={"files_written": list(dfs)}
     )
 
-@asset(deps=[canonical_data])
-def rail_graph() -> Output["nx.Graph"]:       # type: ignore
-    G = graph.build_graph()
-    return Output(
-        G,
-        metadata={"nodes": G.number_of_nodes(), "edges": G.number_of_edges()}
-    )
+@asset(deps=["canonical_data"])
+def rail_graph(canonical_data):
+    return graph.build_graph()
 
-@asset(deps=[canonical_data])
-def demand_matrix() -> Output["pd.DataFrame"]:  # type: ignore
-    D = demand.build()
-    return Output(
-        D,
-        metadata={"shape": D.shape}
-    )
+@asset(deps=["rail_graph", "canonical_data"])
+def demand_matrix(rail_graph, canonical_data):
+    return demand.build_od_matrix(rail_graph)
 
-@asset(deps=[rail_graph, demand_matrix])
+@asset(deps=["rail_graph", "demand_matrix"])
 def timetable(rail_graph, demand_matrix):
     return scheduler.allocate_trains(rail_graph, demand_matrix)
 
-@asset(deps=[timetable])
+@asset(deps=["timetable"])
 def optimised_yards(timetable):
-    return yard_opt.optimise_yards(timetable, yard_candidates=None, max_yards=5)
+    return yard_opt.optimise_yards(timetable, max_yards=4)
+
 
 defs = Definitions(
     assets=[

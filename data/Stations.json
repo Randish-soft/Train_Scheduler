@@ -1,0 +1,56 @@
+[
+  {
+    "station_id":"STN_BEI",
+    "city":"Beirut",
+    "name":"Beirut Central (planned)",
+    "n_tracks":0.0,
+    "size_m2":0.0,
+    "amenities":null,
+    "overhead_wires":"planned"
+  },
+  {
+    "station_id":"STN_SID",
+    "city":"Sidon",
+    "name":"Sidon Central (planned)",
+    "n_tracks":0.0,
+    "size_m2":0.0,
+    "amenities":null,
+    "overhead_wires":"planned"
+  },
+  {
+    "station_id":"STN_ZAH",
+    "city":"Zahle",
+    "name":"Zahle Central (planned)",
+    "n_tracks":0.0,
+    "size_m2":0.0,
+    "amenities":null,
+    "overhead_wires":"planned"
+  },
+  {
+    "station_id":"STN_TYR",
+    "city":"Tyre",
+    "name":"Tyre Central (planned)",
+    "n_tracks":0.0,
+    "size_m2":0.0,
+    "amenities":null,
+    "overhead_wires":"planned"
+  },
+  {
+    "station_id":"STN_JOU",
+    "city":"Jounieh",
+    "name":"Jounieh Central (planned)",
+    "n_tracks":0.0,
+    "size_m2":0.0,
+    "amenities":null,
+    "overhead_wires":"planned"
+  },
+  {
+    "station_id":"STN_TRI",
+    "city":"Tripoli",
+    "name":"Tripoli Central (planned)",
+    "n_tracks":0.0,
+    "size_m2":0.0,
+    "amenities":null,
+    "overhead_wires":"planned"
+  }
+]

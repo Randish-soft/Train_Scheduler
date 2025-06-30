@@ -1,0 +1,30 @@
+[
+  {
+    "city":"Beirut",
+    "population":2400000.0
+  },
+  {
+    "city":"Sidon",
+    "population":250000.0
+  },
+  {
+    "city":"Zahle",
+    "population":150000.0
+  },
+  {
+    "city":"Tyre",
+    "population":135000.0
+  },
+  {
+    "city":"Jounieh",
+    "population":100000.0
+  },
+  {
+    "city":"Tripoli",
+    "population":500000.0
+  },
+  {
+    "city":null,
+    "population":null
+  }
+]

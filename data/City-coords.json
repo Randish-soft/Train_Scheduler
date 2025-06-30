@@ -1,36 +1,30 @@
 [
   {
-    "yard_id":"YRD_BEI",
     "city":"Beirut",
     "lat":33.8938,
     "lon":35.5018
   },
   {
-    "yard_id":"YRD_SID",
     "city":"Sidon",
     "lat":33.5609,
     "lon":35.3756
   },
   {
-    "yard_id":"YRD_ZAH",
     "city":"Zahle",
     "lat":33.8468,
     "lon":35.902
   },
   {
-    "yard_id":"YRD_TYR",
     "city":"Tyre",
     "lat":33.2737,
     "lon":35.2038
   },
   {
-    "yard_id":"YRD_JOU",
     "city":"Jounieh",
     "lat":33.9721,
     "lon":35.6422
   },
   {
-    "yard_id":"YRD_TRI",
     "city":"Tripoli",
     "lat":34.4367,
     "lon":35.8371

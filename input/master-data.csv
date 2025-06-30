@@ -1,0 +1,10 @@
+station_id,city,name,n_tracks,size_m2,amenities,overhead_wires,segment_id,city_a,city_b,distance_km,terrain_class,allowed_train_types,population,yard_id,lat,lon,peak_trains_per_hour,offpeak_trains_per_hour,fiscal_year,currency,capex_million,opex_million
+STN_BEI,Beirut,Beirut Central (planned),0,0,,planned,1,Beirut,Tripoli,81,coastal,"TER,TGV",2400000,YRD_BEI,33.8938,35.5018,0,0,2025,USD,12000,0
+STN_BEI,Beirut,Beirut Central (planned),0,0,,planned,2,Beirut,Sidon,45,coastal,"TER,TGV",2400000,YRD_BEI,33.8938,35.5018,0,0,2025,USD,12000,0
+STN_SID,Sidon,Sidon Central (planned),0,0,,planned,3,Sidon,Tyre,38,coastal,"TER,TGV",250000,YRD_SID,33.5609,35.3756,0,0,2025,USD,12000,0
+STN_BEI,Beirut,Beirut Central (planned),0,0,,planned,4,Beirut,Zahle,54,mountain,"TER,TGV",2400000,YRD_BEI,33.8938,35.5018,0,0,2025,USD,12000,0
+STN_ZAH,Zahle,Zahle Central (planned),0,0,,planned,5,Zahle,Baalbek,46,mountain,"TER,TGV",150000,YRD_ZAH,33.8468,35.902,0,0,2025,USD,12000,0
+STN_TYR,Tyre,Tyre Central (planned),0,0,,planned,6,Tyre,Nabatieh,24,rolling,"TER,TGV",135000,YRD_TYR,33.2737,35.2038,0,0,2025,USD,12000,0
+STN_JOU,Jounieh,Jounieh Central (planned),0,0,,planned,7,Jounieh,Byblos,16,coastal,"TER,TGV",100000,YRD_JOU,33.9721,35.6422,0,0,2025,USD,12000,0
+STN_TRI,Tripoli,Tripoli Central (planned),0,0,,planned,8,Tripoli,Akkar,40,rolling,"TER,TGV",500000,YRD_TRI,34.4367,35.8371,0,0,2025,USD,12000,0
+,,,,,,,,,,,,,,,,,,,2025,USD,12000,0
