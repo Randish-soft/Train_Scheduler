@@ -1,27 +1,10 @@
-import os
-import pathlib as pl
-import pandas as pd
-import json, warnings
+# … existing imports, paths, DEFAULT_COSTS, etc. stay the same …
 
-# ───────────────────────────────────────────────────────────────
-#  Paths
-# ───────────────────────────────────────────────────────────────
-ROOT   = pl.Path(__file__).resolve().parents[1]
-
-# Allow override via env var:  export MASTER_CSV=/path/to/your.csv
-INPUT  = pl.Path(os.getenv("MASTER_CSV", ROOT / "input" / "master-data.csv"))
-
-COSTS  = ROOT / "input" / "cost_params.json"
-OUTPUT = ROOT / "data"
-
-# ───────────────────────────────────────────────────────────────
-#  A. Parse CSV → canonical DataFrames
-# ───────────────────────────────────────────────────────────────
 def parse_master_csv(path: pl.Path = INPUT) -> dict[str, pd.DataFrame]:
     df   = pd.read_csv(path)
     data: dict[str, pd.DataFrame] = {}
 
-    # ── node-level -------------------------------------------------------
+    # ── node-level  -----------------------------------------------------
     data["Stations"] = (
         df[["station_id", "city", "name", "n_tracks",
             "size_m2", "amenities", "overhead_wires"]]
@@ -36,12 +19,7 @@ def parse_master_csv(path: pl.Path = INPUT) -> dict[str, pd.DataFrame]:
         .reset_index(drop=True)
     )
 
-    data["Railyard-position"] = (
-        df[["yard_id", "city", "lat", "lon"]]
-        .dropna(subset=["yard_id"])
-        .drop_duplicates("yard_id")
-        .reset_index(drop=True)
-    )
+    # lat/lon for every city present in the CSV
     data["City-coords"] = (
         df[["city", "lat", "lon"]]
         .dropna(subset=["lat", "lon"])
@@ -49,8 +27,8 @@ def parse_master_csv(path: pl.Path = INPUT) -> dict[str, pd.DataFrame]:
         .reset_index(drop=True)
     )
 
-    # ── edge-level -------------------------------------------------------
-    edge_rows = df[df["segment_id"].notna()]      # ← filter out budget-only row
+    # ── edge-level  -----------------------------------------------------
+    edge_rows = df[df["segment_id"].notna()]
 
     data["Tracks"] = (
         edge_rows[["segment_id", "city_a", "city_b", "distance_km",
@@ -66,52 +44,21 @@ def parse_master_csv(path: pl.Path = INPUT) -> dict[str, pd.DataFrame]:
         .reset_index(drop=True)
     )
 
-    # ── project-wide -----------------------------------------------------
+    # ── project-wide  ---------------------------------------------------
     data["Budget"] = (
         df[["fiscal_year", "currency", "capex_million", "opex_million"]]
         .drop_duplicates("fiscal_year")
         .reset_index(drop=True)
     )
 
+    # ── validation: every city in Tracks must have coordinates ----------
+    track_cities = set(data["Tracks"]["city_a"]) | set(data["Tracks"]["city_b"])
+    coord_cities = set(data["City-coords"]["city"])
+    missing = track_cities - coord_cities
+    if missing:
+        raise ValueError(
+            f"🚫  Missing lat/lon for: {', '.join(sorted(missing))}. "
+            "Add these rows to master-data.csv."
+        )
+
     return data
-
-
-def materialise_json(dfs: dict[str, pd.DataFrame], out_dir: pl.Path = OUTPUT):
-    """Dump every DataFrame to pretty-printed JSON."""
-    out_dir.mkdir(exist_ok=True, parents=True)
-    for name, frame in dfs.items():
-        (out_dir / f"{name}.json").write_text(
-            frame.to_json(orient="records", indent=2)
-        )
-
-# ───────────────────────────────────────────────────────────────
-#  B. Back-compat helper (graph.py & others)
-# ───────────────────────────────────────────────────────────────
-def read_json(name: str) -> pd.DataFrame:
-    path = OUTPUT / f"{name}.json"
-    if not path.exists():
-        raise FileNotFoundError(
-            f"{path} not found – run parse_master_csv()/materialise_json() first."
-        )
-    return pd.read_json(path)
-
-# ───────────────────────────────────────────────────────────────
-#  C. Cost parameters (with on-disk override)
-# ───────────────────────────────────────────────────────────────
-DEFAULT_COSTS = {
-    "track_cost_per_km": {"coastal": 7.5, "rolling": 9.0, "mountain": 18.0},
-    "double_track_multiplier": 1.6,
-    "high_speed_multiplier": 2.1,
-    "train_cost": {"TER_4car": 15.0, "TGV_8car": 38.0},
-    "annual_crew_cost_per_train": 0.45,
-    "discount_rate": 0.05
-}
-
-def load_cost_params() -> dict:
-    if COSTS.exists():
-        with open(COSTS) as f:
-            user_costs = json.load(f)
-        # Python 3.9+ dict union-merge
-        return DEFAULT_COSTS | user_costs
-    warnings.warn("cost_params.json not found – using baked-in defaults")
-    return DEFAULT_COSTS

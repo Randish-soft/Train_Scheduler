@@ -4,19 +4,18 @@ from Model.geom     import haversine
 
 def build_graph() -> nx.Graph:
     tracks   = read_json("Tracks")
-    coords   = read_json("City-coords").set_index("city")[["lat", "lon"]]
+    coords   = read_json("City-coords").set_index("city")
 
     G = nx.Graph()
     for _, row in tracks.iterrows():
         u, v = row["city_a"], row["city_b"]
-        try:
-            lat_u, lon_u = coords.loc[u]
-            lat_v, lon_v = coords.loc[v]
-        except KeyError as e:
-            raise ValueError(f"Missing lat/lon for city {e.args[0]} — "
-                             "check City-coords.json") from None
+
+        # Look-ups will always succeed because dataload.py already validated
+        lat_u, lon_u = coords.loc[u, ["lat", "lon"]]
+        lat_v, lon_v = coords.loc[v, ["lat", "lon"]]
 
         geom_km = haversine(lat_u, lon_u, lat_v, lon_v)
+
         G.add_edge(
             u, v,
             segment_id = row["segment_id"],
