@@ -1,13 +1,20 @@
-station_id,city,name,n_tracks,size_m2,amenities,overhead_wires,segment_id,city_a,city_b,distance_km,terrain_class,allowed_train_types,population,yard_id,lat,lon,peak_trains_per_hour,offpeak_trains_per_hour,fiscal_year,currency,capex_million,opex_million
-STN_BEI,Beirut,Beirut Central (planned),0,0,,planned,1,Beirut,Tripoli,81,coastal,"TER,TGV",2400000,YRD_BEI,33.8938,35.5018,0,0,2025,USD,12000,0
-STN_BEI,Beirut,Beirut Central (planned),0,0,,planned,2,Beirut,Sidon,45,coastal,"TER,TGV",2400000,YRD_BEI,33.8938,35.5018,0,0,2025,USD,12000,0
-STN_SID,Sidon,Sidon Central (planned),0,0,,planned,3,Sidon,Tyre,38,coastal,"TER,TGV",250000,YRD_SID,33.5609,35.3756,0,0,2025,USD,12000,0
-STN_BEI,Beirut,Beirut Central (planned),0,0,,planned,4,Beirut,Zahle,54,mountain,"TER,TGV",2400000,YRD_BEI,33.8938,35.5018,0,0,2025,USD,12000,0
-STN_ZAH,Zahle,Zahle Central (planned),0,0,,planned,5,Zahle,Baalbek,46,mountain,"TER,TGV",150000,YRD_ZAH,33.8468,35.9020,0,0,2025,USD,12000,0
-STN_TYR,Tyre,Tyre Central (planned),0,0,,planned,6,Tyre,Nabatieh,24,rolling,"TER,TGV",135000,YRD_TYR,33.2737,35.2038,0,0,2025,USD,12000,0
-STN_JOU,Jounieh,Jounieh Central (planned),0,0,,planned,7,Jounieh,Byblos,16,coastal,"TER,TGV",100000,YRD_JOU,33.9721,35.6422,0,0,2025,USD,12000,0
-STN_TRI,Tripoli,Tripoli Central (planned),0,0,,planned,8,Tripoli,Akkar,40,rolling,"TER,TGV",500000,YRD_TRI,34.4367,35.8371,0,0,2025,USD,12000,0
-,,,,,,,,,,,,,,,,Akkar,34.5500,36.0667,,,2025,USD,12000,0
-,,,,,,,,,,,,,,,,Baalbek,34.0059,36.2110,,,2025,USD,12000,0
-,,,,,,,,,,,,,,,,Byblos,34.1230,35.6519,,,2025,USD,12000,0
-,,,,,,,,,,,,,,,,Nabatieh,33.3789,35.4839,,,2025,USD,12000,0
+station_id,city,name,n_tracks,size_m2,amenities,overhead_wires,population,lat,lon,segment_id,city_a,city_b,distance_km,terrain_class,allowed_train_types,peak_trains_per_hour,offpeak_trains_per_hour,fiscal_year,currency,capex_million,opex_million
+,Tripoli,,,,,,730000,34.4367,35.8497,,,,,,,,,,,,
+,Sidon,,,,,,380000,33.5607,35.3909,,,,,,,,,,,,
+,Tyre,,,,,,200000,33.2705,35.1948,,,,,,,,,,,,
+,Zahle,,,,,,150000,33.8463,35.9020,,,,,,,,,,,,
+,Jounieh,,,,,,120000,33.9808,35.6178,,,,,,,,,,,,
+,Baalbek,,,,,,85000,34.0058,36.2180,,,,,,,,,,,,
+,Byblos,,,,,,70000,34.1224,35.6520,,,,,,,,,,,,
+,Nabatieh,,,,,,60000,33.3772,35.4831,,,,,,,,,,,,
+,Aley,,,,,,50000,33.8100,35.5990,,,,,,,,,,,,
+,Batroun,,,,,,45000,34.2555,35.6581,,,,,,,,,,,,
+,Zgharta,,,,,,40000,34.3975,35.8965,,,,,,,,,,,,
+,Jbeil,,,,,,35000,34.1214,35.6482,,,,,,,,,,,,
+,Halba,,,,,,30000,34.5428,36.0797,,,,,,,,,,,,
+,Marjayoun,,,,,,25000,33.3608,35.5914,,,,,,,,,,,,
+,Chekka,,,,,,25000,34.3297,35.7278,,,,,,,,,,,,
+,Bcharre,,,,,,20000,34.2511,36.0128,,,,,,,,,,,,
+,Jezzine,,,,,,18000,33.5419,35.5842,,,,,,,,,,,,
+,Rashaya,,,,,,15000,33.4989,35.8436,,,,,,,,,,,,
+,Douma,,,,,,12000,34.0083,35.6500,,,,,,,,,,,,

@@ -1,32 +1,97 @@
 [
   {
-    "city":"Beirut",
-    "lat":33.8938,
-    "lon":35.5018
+    "city":"Tripoli",
+    "lat":34.4367,
+    "lon":35.8497
   },
   {
     "city":"Sidon",
-    "lat":33.5609,
-    "lon":35.3756
-  },
-  {
-    "city":"Zahle",
-    "lat":33.8468,
-    "lon":35.902
+    "lat":33.5607,
+    "lon":35.3909
   },
   {
     "city":"Tyre",
-    "lat":33.2737,
-    "lon":35.2038
+    "lat":33.2705,
+    "lon":35.1948
+  },
+  {
+    "city":"Zahle",
+    "lat":33.8463,
+    "lon":35.902
   },
   {
     "city":"Jounieh",
-    "lat":33.9721,
-    "lon":35.6422
+    "lat":33.9808,
+    "lon":35.6178
   },
   {
-    "city":"Tripoli",
-    "lat":34.4367,
-    "lon":35.8371
+    "city":"Baalbek",
+    "lat":34.0058,
+    "lon":36.218
+  },
+  {
+    "city":"Byblos",
+    "lat":34.1224,
+    "lon":35.652
+  },
+  {
+    "city":"Nabatieh",
+    "lat":33.3772,
+    "lon":35.4831
+  },
+  {
+    "city":"Aley",
+    "lat":33.81,
+    "lon":35.599
+  },
+  {
+    "city":"Batroun",
+    "lat":34.2555,
+    "lon":35.6581
+  },
+  {
+    "city":"Zgharta",
+    "lat":34.3975,
+    "lon":35.8965
+  },
+  {
+    "city":"Jbeil",
+    "lat":34.1214,
+    "lon":35.6482
+  },
+  {
+    "city":"Halba",
+    "lat":34.5428,
+    "lon":36.0797
+  },
+  {
+    "city":"Marjayoun",
+    "lat":33.3608,
+    "lon":35.5914
+  },
+  {
+    "city":"Chekka",
+    "lat":34.3297,
+    "lon":35.7278
+  },
+  {
+    "city":"Bcharre",
+    "lat":34.2511,
+    "lon":36.0128
+  },
+  {
+    "city":"Jezzine",
+    "lat":33.5419,
+    "lon":35.5842
+  },
+  {
+    "city":"Rashaya",
+    "lat":33.4989,
+    "lon":35.8436
+  },
+  {
+    "city":"Douma",
+    "lat":34.0083,
+    "lon":35.65
   }
 ]

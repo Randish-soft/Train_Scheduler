@@ -1,30 +1,78 @@
 [
   {
-    "city":"Beirut",
-    "population":2400000.0
+    "city":"Tripoli",
+    "population":730000
   },
   {
     "city":"Sidon",
-    "population":250000.0
-  },
-  {
-    "city":"Zahle",
-    "population":150000.0
+    "population":380000
   },
   {
     "city":"Tyre",
-    "population":135000.0
+    "population":200000
+  },
+  {
+    "city":"Zahle",
+    "population":150000
   },
   {
     "city":"Jounieh",
-    "population":100000.0
+    "population":120000
   },
   {
-    "city":"Tripoli",
-    "population":500000.0
+    "city":"Baalbek",
+    "population":85000
   },
   {
-    "city":null,
-    "population":null
+    "city":"Byblos",
+    "population":70000
+  },
+  {
+    "city":"Nabatieh",
+    "population":60000
+  },
+  {
+    "city":"Aley",
+    "population":50000
+  },
+  {
+    "city":"Batroun",
+    "population":45000
+  },
+  {
+    "city":"Zgharta",
+    "population":40000
+  },
+  {
+    "city":"Jbeil",
+    "population":35000
+  },
+  {
+    "city":"Halba",
+    "population":30000
+  },
+  {
+    "city":"Marjayoun",
+    "population":25000
+  },
+  {
+    "city":"Chekka",
+    "population":25000
+  },
+  {
+    "city":"Bcharre",
+    "population":20000
+  },
+  {
+    "city":"Jezzine",
+    "population":18000
+  },
+  {
+    "city":"Rashaya",
+    "population":15000
+  },
+  {
+    "city":"Douma",
+    "population":12000
   }
 ]

@@ -1,8 +1,3 @@
-"""
-Load the single master CSV, split it to canonical DataFrames, validate
-lat/lon coverage, and write pretty-printed JSON files to data/.
-"""
-
 import os
 import pathlib as pl
 import pandas as pd
@@ -14,7 +9,6 @@ import json, warnings, glob
 ROOT       = pl.Path(__file__).resolve().parents[1]
 INPUT_DIR  = ROOT / "input"
 
-# Priority: (1) env var  (2) exactly-one *.csv in input/  (3) master-data.csv
 if os.getenv("MASTER_CSV"):
     INPUT = pl.Path(os.getenv("MASTER_CSV")).expanduser()
 else:
@@ -27,9 +21,6 @@ else:
 COSTS  = ROOT / "input" / "cost_params.json"
 OUTPUT = ROOT / "data"
 
-# ───────────────────────────────────────────────────────────────
-#  C. Cost parameters (optional override)
-# ───────────────────────────────────────────────────────────────
 DEFAULT_COSTS = {
     "track_cost_per_km": {"coastal": 7.5, "rolling": 9.0, "mountain": 18.0},
     "double_track_multiplier": 1.6,
@@ -47,12 +38,33 @@ def load_cost_params() -> dict:
     return DEFAULT_COSTS
 
 # ───────────────────────────────────────────────────────────────
+#  A. Pre-validation before parsing
+# ───────────────────────────────────────────────────────────────
+def validate_csv_column_counts(path: pl.Path) -> None:
+    """
+    Check if all rows in the CSV have the same number of columns as the header.
+    Raises ValueError with row number if mismatch is found.
+    """
+    with open(path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+
+    header_cols = len(lines[0].strip().split(","))
+    for i, line in enumerate(lines[1:], start=2):
+        if len(line.strip().split(",")) != header_cols:
+            raise ValueError(
+                f"❌ Malformed CSV: Line {i} has {len(line.strip().split(','))} columns, "
+                f"but header has {header_cols}. Fix the CSV before proceeding."
+            )
+
+# ───────────────────────────────────────────────────────────────
 #  A. Parse CSV → canonical DataFrames
 # ───────────────────────────────────────────────────────────────
 def parse_master_csv(path: pl.Path | None = None) -> dict[str, pd.DataFrame]:
     path = path or INPUT
     if not path.exists():
         raise FileNotFoundError(f"CSV input not found: {path}")
+
+    validate_csv_column_counts(path)  # Ensure clean CSV
 
     df   = pd.read_csv(path)
     data: dict[str, pd.DataFrame] = {}
@@ -114,7 +126,6 @@ def parse_master_csv(path: pl.Path | None = None) -> dict[str, pd.DataFrame]:
             f"🚫 Missing lat/lon for: {', '.join(sorted(missing))}. "
             "Add these rows to your CSV."
         )
-
 
     return data
 

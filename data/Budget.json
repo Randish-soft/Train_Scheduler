@@ -1,8 +1,8 @@
 [
   {
-    "fiscal_year":2025,
-    "currency":"USD",
-    "capex_million":12000,
-    "opex_million":0
+    "fiscal_year":null,
+    "currency":null,
+    "capex_million":null,
+    "opex_million":null
   }
 ]
