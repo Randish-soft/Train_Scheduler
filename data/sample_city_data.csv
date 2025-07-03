@@ -1,0 +1,4 @@
+city,state,population,area,lat,lon,budget,tourism_index,job_center_lat,job_center_lon,job_count
+Metro City,CA,2500000,1500,37.7749,-122.4194,5000000000,0.8,37.7849,-122.4094,500000
+Coastal Town,CA,750000,500,36.9741,-122.0308,1500000000,0.9,36.9841,-122.0208,150000
+Mountain Valley,CO,350000,300,39.7392,-104.9903,800000000,0.6,39.7492,-104.9803,75000
