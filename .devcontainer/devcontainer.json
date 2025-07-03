@@ -1,0 +1,29 @@
+{
+    "name": "bcpc-dagster",
+    "build": {
+      "dockerfile": "Dockerfile",
+      "context": "..",
+      "args": {
+        "PYTHON_VERSION": "3.11"
+      }
+    },
+    "workspaceFolder": "/workspace",
+    "runArgs": [
+      "--init",
+      "-p", "3000:3000",
+      "-p", "8888:8888"
+    ],
+    "postCreateCommand": "poetry install --no-interaction",
+    "customizations": {
+      "vscode": {
+        "extensions": [
+          "ms-python.python",
+          "ms-azuretools.vscode-docker"
+        ]
+      }
+    },
+    "features": {
+      "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+    }
+  }
+  

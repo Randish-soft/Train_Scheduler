@@ -1,28 +1,16 @@
-version: '3.8'
+version: "3.8"
+
 services:
-  postgres:
-    image: postgres:14
+  bcpc:
+    build:
+      context: .
+    container_name: bcpc
     environment:
-      POSTGRES_USER: bcpc_user
-      POSTGRES_PASSWORD: bcpc_password
-      POSTGRES_DB: bcpc_db
+      PYTHONUNBUFFERED: "1"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ./:/workspace
     ports:
-      - "5432:5432"
-
-  bcpc-app:
-    build: .
-    volumes:
-      - ./src:/app/src
-      - ./data:/app/data
-      - ./outputs:/app/outputs
-    environment:
-      - PYTHONPATH=/app
-    depends_on:
-      - postgres
-    ports:
-      - "8000:8000"
-
-volumes:
-  postgres_data:
+      - "8888:8888"   # Jupyter notebooks
+    command: >
+      bash -c "jupyter notebook --ip=0.0.0.0 --no-browser
+               --NotebookApp.token='' --NotebookApp.password=''"

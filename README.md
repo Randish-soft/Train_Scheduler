@@ -1,24 +1,25 @@
-# BCPC - Bring the Cities back to the People and not the Cars
+# BCPC — Bring Cities back to the People (not Cars)
 
-Urban rail transportation planning pipeline that prioritizes public transit.
+BCPC is a modular, data-driven toolkit that designs people-centred rail networks:
 
-## Quick Start
+* **CSV ➜ Maps** Ingest simple scenario CSVs, enrich with open data, run
+  multi-objective optimisation, then export interactive OpenStreetMap layers.
+* **Budget-aware** Costs calibrated from real-world tenders and indices.
+* **Multi-modal** Adds tram, bus, and active-travel links around core rail.
+* **Headless or interactive** Run as a CLI / FastAPI micro-service or explore in notebooks.
 
-1. Build: `make build`
-2. Start: `make up`
-3. Run: `make run`
+---
 
-## Features
+## Quick start (with Docker + Poetry)
 
-- Analyzes city data and constraints
-- Suggests optimal public transportation modes
-- Designs rail networks with NIMBY considerations
-- Plans station locations and characteristics
-- Generates interactive visualizations
+```bash
+docker compose up --build
+```
+# Project layout
+data/       raw & interim geo/CSV inputs
+input/      user-supplied scenario CSVs
+output/     generated maps, reports, BoMs
+src/        application code
+tests/      pytest suite
 
-## Data Format
 
-CSV file with columns:
-- city, state, population, area, lat, lon
-- budget, tourism_index
-- job_center_lat, job_center_lon, job_count
