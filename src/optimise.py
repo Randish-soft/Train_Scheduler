@@ -1,46 +1,112 @@
 """
-optimise.py – Multi-objective rail routing & fleet-sizing optimiser (stub).
+optimise.py – toy optimiser with gauge / track / train choices.
+
+Still a stub: selects the cheapest option that fits the budget and returns a
+1-km hub-and-spoke graph.  Now uses the correct TrackType signature:
+(name, gauge, electrified, speed_max_kmh, min_radius_m, capex_per_km_eur)
 """
+
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from typing import List
 
 import networkx as nx
 
-from .cost import estimate_cost
-from .demand import DemandResult
+from .models import Gauge, TrackType, TrainType
 
 logger = logging.getLogger("bcpc.optimise")
 
 
-@dataclass
+# ---------------------------------------------------------------------------
+# Demo catalogues (now with min-radius) -------------------------------------
+STD_TRACK = TrackType(
+    name="Std-Catenary-160",
+    gauge=Gauge.STANDARD,
+    electrified=True,
+    speed_max_kmh=160,
+    min_radius_m=1_200,
+    capex_per_km_eur=12_000_000,
+)
+METRIC_TRACK = TrackType(
+    name="Metric-Diesel-100",
+    gauge=Gauge.METRIC,
+    electrified=False,
+    speed_max_kmh=100,
+    min_radius_m=800,
+    capex_per_km_eur=7_000_000,
+)
+
+EMU = TrainType(
+    name="4-car EMU",
+    gauge=Gauge.STANDARD,
+    capacity=400,
+    top_speed_kmh=160,
+    purchase_cost_eur=10_000_000,
+    opex_per_km_eur=8,
+)
+DMU = TrainType(
+    name="2-car DMU",
+    gauge=Gauge.METRIC,
+    capacity=140,
+    top_speed_kmh=100,
+    purchase_cost_eur=4_000_000,
+    opex_per_km_eur=6,
+)
+
+TRACK_CHOICES: List[TrackType] = [STD_TRACK, METRIC_TRACK]
+TRAIN_CHOICES: List[TrainType] = [EMU, DMU]
+
+
+# ---------------------------------------------------------------------------
+# Return container ----------------------------------------------------------
 class NetworkDesign:
-    graph: nx.Graph
-    cost_eur: float
-    ridership_daily: float
+    def __init__(
+        self,
+        graph: nx.Graph,
+        track: TrackType,
+        train: TrainType,
+        ridership_daily: float,
+        cost_eur: float,
+    ) -> None:
+        self.graph = graph
+        self.track = track
+        self.train = train
+        self.ridership_daily = ridership_daily
+        self.cost_eur = cost_eur
 
 
-def simple_star_network(zones: int) -> nx.Graph:
-    """Return star graph: node 0 hub, edges to all others (toy example)."""
+# ---------------------------------------------------------------------------
+# Toy optimiser -------------------------------------------------------------
+def _star_graph_km() -> nx.Graph:
+    """Return a 1-km star centred at (0,0) – placeholder geometry."""
     g = nx.Graph()
-    g.add_nodes_from(range(zones))
-    g.add_weighted_edges_from((0, i, 5) for i in range(1, zones))
+    g.add_edge((0, 0), (0.5, 0), weight=0.5)
+    g.add_edge((0, 0), (-0.5, 0), weight=0.5)
     return g
 
 
-def optimise_design(demand: DemandResult, budget_eur: int) -> NetworkDesign:
-    """Toy optimiser – picks either star or do-nothing based on budget."""
-    zones = len(demand.od)
-    g = simple_star_network(zones)
-    km_track = g.size(weight="weight")
-    n_stations = zones
-    # rule-of-thumb: 1 trainset per 4 km
-    trainsets = int(max(1, km_track / 4))
-    breakdown = estimate_cost(km_track, n_stations, n_yards=1, trainsets=trainsets)
-    if breakdown.total() > budget_eur:
+def optimise_design(demand_ppd: float, budget_eur: float) -> NetworkDesign:
+    """
+    Pick the cheapest gauge/stock combo that fits the budget.
+    Fallback: empty graph.
+    """
+    graph = _star_graph_km()
+    track = STD_TRACK
+    train = EMU
+
+    for tck, trn in zip(TRACK_CHOICES, TRAIN_CHOICES, strict=False):
+        capex = tck.capex_per_km_eur * graph.size()
+        rolling = trn.purchase_cost_eur * 5  # 5 trainsets
+        total = capex + rolling
+        if total <= budget_eur:
+            track, train, cost = tck, trn, total
+            break
+    else:
         logger.warning("Budget insufficient – returning empty network")
-        g = nx.Graph()
-        breakdown = estimate_cost(0, 0, 0, 0)
-    ridership = demand.od.values.sum() / 2  # symmetric OD
-    return NetworkDesign(graph=g, cost_eur=breakdown.total(), ridership_daily=ridership)
+        return NetworkDesign(nx.Graph(), track, train, demand_ppd, 0.0)
+
+    logger.info(
+        "Selected %s + %s at €%.1f M", track.name, train.name, cost / 1e6
+    )
+    return NetworkDesign(graph, track, train, demand_ppd, cost)
