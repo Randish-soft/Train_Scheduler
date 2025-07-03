@@ -2,15 +2,18 @@ version: "3.8"
 
 services:
   bcpc:
-    build:
-      context: .
+    build: .
     container_name: bcpc
     environment:
-      PYTHONUNBUFFERED: "1"
+      - DAGSTER_HOME=/workspace/.dagster
+      - PYTHONUNBUFFERED=1
     volumes:
-      - ./:/workspace
+      - .:/workspace            # mount repo
     ports:
-      - "8888:8888"   # Jupyter notebooks
+      - "3000:3000"             # Dagit UI
     command: >
-      bash -c "jupyter notebook --ip=0.0.0.0 --no-browser
-               --NotebookApp.token='' --NotebookApp.password=''"
+      sh -c "
+        mkdir -p $${DAGSTER_HOME} &&
+        dagster webserver -h 0.0.0.0 -p 3000 --workspace workspace.yaml &
+        dagster-daemon run
+      "
