@@ -1,19 +1,32 @@
-# ────────────────────────────────────────────────────────────────
-# Base
-FROM mcr.microsoft.com/vscode/devcontainers/python:0-3.11
+ARG PYTHON_VERSION=3.11
+FROM python:${PYTHON_VERSION}-slim
 
-# ────────────────────────────────────────────────────────────────
-# OS libraries
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        build-essential graphviz libgraphviz-dev && \
+ENV POETRY_HOME=/opt/poetry \
+    POETRY_VIRTUALENVS_CREATE=false \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+RUN apt-get update -qq && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        build-essential git curl gdal-bin libgdal-dev libproj-dev proj-data proj-bin \
+        libspatialindex-dev graphviz && \
     rm -rf /var/lib/apt/lists/*
 
-# ────────────────────────────────────────────────────────────────
-# Python deps
-COPY Model/requirements.txt /tmp/
-RUN pip install --no-cache-dir -r /tmp/requirements.txt \
-    dagster dagster-webserver
+RUN curl -sSL https://install.python-poetry.org | python3 - && \
+    ln -s $POETRY_HOME/bin/poetry /usr/local/bin/poetry
 
-# ────────────────────────────────────────────────────────────────
 WORKDIR /workspace
+
+# ----- deps -------
+COPY pyproject.toml ./
+# COPY poetry.lock ./        # ← uncomment if you have it
+RUN poetry install --no-interaction --no-ansi --no-root
+
+# Dagster UI + daemon client
+RUN pip install dagster dagster-webserver
+
+# ----- copy code last ----
+COPY . .
+
+# Default command is just a shell; VS Code will run postStartCommand
+CMD ["bash"]

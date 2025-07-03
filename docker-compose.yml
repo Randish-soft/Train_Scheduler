@@ -1,0 +1,19 @@
+version: "3.8"
+
+services:
+  bcpc:
+    build: .
+    container_name: bcpc
+    environment:
+      - DAGSTER_HOME=/workspace/.dagster
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - .:/workspace            # mount repo
+    ports:
+      - "3000:3000"             # Dagit UI
+    command: >
+      sh -c "
+        mkdir -p $${DAGSTER_HOME} &&
+        dagster webserver -h 0.0.0.0 -p 3000 --workspace workspace.yaml &
+        dagster-daemon run
+      "
