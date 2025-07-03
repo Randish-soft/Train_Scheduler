@@ -2,3 +2,5 @@
 .venv
 .env
 input
+output
+data
