@@ -41,3 +41,6 @@ build-backend = "poetry.core.masonry.api"
 [tool.dagster]
 module = "src.bcpc_dagster"
 requests = "^2.32"
+
+[tool.poetry.scripts]
+bcpc = "src.cli:main"

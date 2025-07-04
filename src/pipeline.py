@@ -29,7 +29,7 @@ from .commuter_model import estimate_commuters
 from .cost import CostBreakdown, estimate_cost
 from .demand import estimate_demand
 from .enrich import get_city_boundary
-from .io import ScenarioRow, save_geojson
+from .scenario_io import ScenarioRow, save_geojson
 from .models import Gauge, TrackType, TrainType
 from .optimise import NetworkDesign, optimise_design
 from .routing import trace_route, RoutingError

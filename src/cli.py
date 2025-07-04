@@ -1,28 +1,41 @@
-# ── src/cli.py ──────────────────────────────────────────────────────────────
-from __future__ import annotations
+"""
+cli.py – thin command-line wrapper for the BCPC demo pipeline
+------------------------------------------------------------
 
+Invokes `run_city_pipeline(row, all_rows, track, train)` for every row in a
+scenario CSV.  Track/train defaults are the same demo objects used inside
+city_pipeline.py, so everything stays in sync.
+"""
+from __future__ import annotations
 import argparse
 import logging
 import sys
 from pathlib import Path
 from typing import Sequence
 
-from . import INPUT_DIR
-from .io import load_scenario
-from .pipeline import run_pipeline
+from src import INPUT_DIR              # defined in src/__init__.py
+from src.scenario_io import load_scenario
+from src.city_pipeline import run_city_pipeline as run_pipeline
 
+# --- default catalogue choices (keep in one place) -------------------------
+from src.models import Gauge, TrackType, TrainType
+
+STD_TRACK = TrackType(
+    "Std-Cat-160", Gauge.STANDARD, True, 160, 1_200, 12_000_000
+)
+EMU = TrainType(
+    "4-car EMU", Gauge.STANDARD, 400, 160, 10_000_000, 8
+)
+
+# --- logging ---------------------------------------------------------------
+log = logging.getLogger("bcpc.cli")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s │ %(message)s")
-LOG = logging.getLogger("bcpc.cli")
 
 
-# ───────────────────────── helper: list CSVs ───────────────────────────────
-def _find_csv_files() -> list[Path]:
-    return sorted(INPUT_DIR.glob("*.csv"))
-
-
-# ─────────────────── interactive arrow-key picker ──────────────────────────
+# ---------------------------------------------------------------------------
+# Terminal helper to pick a file with ↑ / ↓ (falls back to numeric prompt)
+# ---------------------------------------------------------------------------
 def _arrow_menu(options: Sequence[str]) -> int:
-    """Return index chosen via ↑/↓ + Enter (uses curses)."""
     import curses
 
     def _menu(stdscr):
@@ -44,47 +57,38 @@ def _arrow_menu(options: Sequence[str]) -> int:
     return curses.wrapper(_menu)
 
 
-def _select_file(paths: Sequence[Path]) -> Path:
-    opts = [p.name for p in paths]
-    try:
-        choice = _arrow_menu(opts)
-        return paths[choice]
-    except Exception:  # fallback if curses isn't available (e.g. Windows)
-        print("\n".join(f"[{i}] {p.name}" for i, p in enumerate(paths)))
-        while True:
-            sel = input("Select file number: ")
-            if sel.isdigit() and int(sel) in range(len(paths)):
-                return paths[int(sel)]
-            print("Invalid selection.")
+def _find_csv_files() -> list[Path]:
+    return sorted(INPUT_DIR.glob("*.csv"))
 
 
-# ──────────────────────────── main entry-point ─────────────────────────────
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run BCPC scenario pipeline")
     parser.add_argument("--csv", help="Path to scenario CSV")
     args = parser.parse_args()
 
-    # ── locate CSV ──
+    # -- locate CSV --------------------------------------------------------
     if args.csv:
         csv_path = Path(args.csv)
     else:
         csvs = _find_csv_files()
         if not csvs:
-            LOG.error("No CSV files found in %s", INPUT_DIR)
+            log.error("No CSV files found in %s", INPUT_DIR)
             sys.exit(1)
         if len(csvs) == 1:
             csv_path = csvs[0]
-            LOG.info("Found single CSV: %s", csv_path.name)
+            log.info("Using %s", csv_path.name)
         else:
-            LOG.info("Multiple CSVs detected – pick one with ↑ ↓ and Enter")
-            csv_path = _select_file(csvs)
+            csv_path = csvs[_arrow_menu([p.name for p in csvs])]
 
-    # ── load & run ──
-    rows = load_scenario(csv_path)            # list[ScenarioRow]
-    LOG.info("Using CSV %s (%d rows)", csv_path.name, len(rows))
+    log.info("CSV → %s", csv_path)
 
+    # -- run scenario rows -------------------------------------------------
+    rows = load_scenario(csv_path)
     for row in rows:
-        run_pipeline(row, rows)               # <-- pass ALL rows
+        run_pipeline(row, rows, STD_TRACK, EMU)
 
 
 if __name__ == "__main__":
