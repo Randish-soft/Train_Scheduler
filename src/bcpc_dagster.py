@@ -1,6 +1,6 @@
 from pathlib import Path
 from dagster import In, Out, op, job, ScheduleDefinition, get_run_context
-from src.io import load_scenario
+from src.scenario_io import load_scenario
 from src.pipeline import run_pipeline
 
 CSV_DEFAULT = "input/lebanon_cities_2024.csv"

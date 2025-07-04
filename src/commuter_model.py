@@ -15,7 +15,7 @@ from typing import Sequence
 import numpy as np
 from geopy.distance import great_circle
 
-from .io import ScenarioRow
+from .scenario_io import ScenarioRow
 from .enrich import get_city_boundary
 
 
