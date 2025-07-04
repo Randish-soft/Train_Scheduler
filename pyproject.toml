@@ -7,24 +7,26 @@ readme = "README.md"
 packages = [{ include = "src" }]
 
 [tool.poetry.dependencies]
-python      = "^3.11"
-pandas      = "^2.2"
-geopandas   = ">=0.14,<0.15"
-osmnx       = {version = "^1.7", extras = ["all"]}   # ← NEW / upgrade
-networkx    = "^3.2"
-shapely     = "^2.0"
-rasterio    = "^1.3"
-scikit-learn = "^1.4"
-pyomo       = "^6.7"
-pulp        = "^2.8"
-folium      = "^0.16"
-ipyleaflet  = "^0.18"
-fastapi     = "^0.111"
-uvicorn     = { extras = ["standard"], version = "^0.29" }
-loguru      = "^0.7"
-requests    = "^2.32.4"
-text-unidecode = "^1.3" 
-geopy = "^2.4"
+python          = "^3.11"
+pandas          = "^2.2"
+geopandas       = ">=0.14,<0.15"
+osmnx           = { version = "^1.7", extras = ["all"] }     # keep for now
+networkx        = "^3.2"
+shapely         = "^2.0"
+rasterio        = "^1.3"
+richdem         = "^0.3.4"          # ← NEW  ➜ builds the DEM cost-surface
+scikit-learn    = "^1.4"
+pyomo           = "^6.7"
+pulp            = "^2.8"
+folium          = "^0.16"
+ipyleaflet      = "^0.18"
+fastapi         = "^0.111"
+uvicorn         = { extras = ["standard"], version = "^0.29" }
+loguru          = "^0.7"
+requests        = "^2.32.4"
+text-unidecode  = "^1.3"
+geopy           = "^2.4"
+
 
 
 [tool.poetry.group.dev.dependencies]
