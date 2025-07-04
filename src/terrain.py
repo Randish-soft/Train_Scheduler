@@ -1,170 +1,130 @@
 """
-terrain.py – real SRTM DEM loader + slope helper (v1.1).
+terrain.py – DEM fetch & utilities (OpenTopography edition, v0·6)
 
-• Downloads / caches 1-arc-sec tiles from AWS srtm-pds
-• Mosaics, clips, resamples to ≤512×512
-• Provides slope_percent(dem) for routing cost
-• Falls back to flat DEM if download fails
+* Downloads SRTMGL1_E (≈30 m) tiles from OpenTopography’s GlobalDEM API.
+* Falls back to ASTER GDEM v3 (≈30 m) if SRTM is unavailable in the area.
+* Caches every GeoTIFF under  data/_dem/  so subsequent runs are instant.
+* Provides `load_dem(boundary_gdf)`   → rasterio dataset
+         and `slope_percent(dem_ds)` → ndarray of % slope for the whole tile.
 """
-
 from __future__ import annotations
 
-import gzip
+import hashlib
 import logging
-import math
-import shutil
+import os
 import tempfile
 from pathlib import Path
-from typing import List, Tuple
+from typing import Tuple
 
-import geopandas as gpd
 import numpy as np
 import rasterio
+import rasterio.enums
+import rasterio.windows
 import requests
-from rasterio.enums import Resampling
-from rasterio.errors import RasterioIOError
-from rasterio.merge import merge
-from rasterio.transform import from_bounds
-from rasterio.windows import from_bounds as win_from_bounds
+from rasterio.io import DatasetReader
+from shapely.geometry import box
 
 from . import DATA_DIR
 
 logger = logging.getLogger("bcpc.terrain")
 
-_DEM_DIR = DATA_DIR / "dem"
-_DEM_DIR.mkdir(exist_ok=True, parents=True)
+_DEM_CACHE = DATA_DIR / "_dem"
+_DEM_CACHE.mkdir(parents=True, exist_ok=True)
 
-AWS_URL = "https://s3.amazonaws.com/srtm-pds/SRTM1/{lat}/{name}.hgt.gz"
-
-
-# ---------------------------------------------------------------------------
-# internal helpers
-# ---------------------------------------------------------------------------
-def _tile_name(lat: int, lon: int) -> str:
-    ns = "N" if lat >= 0 else "S"
-    ew = "E" if lon >= 0 else "W"
-    return f"{ns}{abs(lat):02d}{ew}{abs(lon):03d}"
+# ---------------------------------------------------------------------------#
+# Config                                                                     #
+# ---------------------------------------------------------------------------#
+OT_API = "https://portal.opentopography.org/API/globaldem"
+OT_KEY = os.getenv("OT_API_KEY", "153e670200e6b3568ff813c994fda446")  # ← your key
+OT_TIMEOUT = 60  # seconds
 
 
-def _download_tile(tile_code: str, dest_tif: Path, retries: int = 3) -> None:
-    lat_band = tile_code[:3]  # e.g. N33
-    url = AWS_URL.format(lat=lat_band, name=tile_code)
-    tmp_dir = tempfile.mkdtemp()
-    gz_path = Path(tmp_dir) / f"{tile_code}.hgt.gz"
+# ---------------------------------------------------------------------------#
+# Helpers                                                                    #
+# ---------------------------------------------------------------------------#
+def _bbox_from_gdf(gdf) -> Tuple[float, float, float, float]:
+    minx, miny, maxx, maxy = gdf.total_bounds
+    pad = 0.05  # deg padding so edges aren’t cut off
+    return maxy + pad, miny - pad, minx - pad, maxx + pad  # north, south, west, east
 
-    for attempt in range(1, retries + 1):
+
+def _hash_bbox(n: float, s: float, w: float, e: float, demtype: str) -> str:
+    m = hashlib.md5()
+    m.update(f"{demtype}:{n:.4f},{s:.4f},{w:.4f},{e:.4f}".encode())
+    return m.hexdigest()[:16]
+
+
+def _download_dem(n: float, s: float, w: float, e: float, demtype: str) -> Path:
+    """
+    Download a DEM for the given bbox and return the cached file path.
+    """
+    cache_name = f"{_hash_bbox(n, s, w, e, demtype)}_{demtype}.tif"
+    cache_path = _DEM_CACHE / cache_name
+    if cache_path.exists():
+        logger.debug("DEM cache hit (%s)", cache_path.name)
+        return cache_path
+
+    params = {
+        "demtype": demtype,
+        "south":  s,
+        "north":  n,
+        "west":   w,
+        "east":   e,
+        "outputFormat": "GTiff",
+        "API_Key": OT_KEY,
+    }
+    logger.info("Fetching %s DEM %.2f,%.2f,%.2f,%.2f", demtype, s, n, w, e)
+    with requests.get(OT_API, params=params, stream=True, timeout=OT_TIMEOUT) as r:
+        r.raise_for_status()
+        # The API returns a small text message if the tile is absent – guard it
+        if r.headers.get("Content-Type", "").startswith("text"):
+            raise RuntimeError(r.text.strip())
+
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".tif")
+        for chunk in r.iter_content(chunk_size=1 << 16):
+            tmp.write(chunk)
+        tmp.close()
+        Path(tmp.name).rename(cache_path)
+    return cache_path
+
+
+def load_dem(boundary_gdf) -> DatasetReader:
+    """
+    Return a rasterio dataset covering the boundary.
+
+    Tries SRTMGL1_E first (≈30 m); if that fails, falls back to ASTER GDEM v3.
+    """
+    n, s, w, e = _bbox_from_gdf(boundary_gdf)
+    for dem in ("SRTMGL1_E", "ASTER30m"):
         try:
-            logger.info("Downloading %s (attempt %d)", tile_code, attempt)
-            with requests.get(url, stream=True, timeout=30) as r:
-                r.raise_for_status()
-                with open(gz_path, "wb") as f:
-                    shutil.copyfileobj(r.raw, f)
-            break
+            tif = _download_dem(n, s, w, e, dem)
+            ds = rasterio.open(tif)
+            logger.debug("Opened DEM %s", tif.name)
+            return ds
         except Exception as exc:  # noqa: BLE001
-            logger.warning("Download failed: %s", exc)
-            if attempt == retries:
-                raise
-
-    hgt_path = gz_path.with_suffix("")
-    with gzip.open(gz_path, "rb") as src, open(hgt_path, "wb") as dst:
-        shutil.copyfileobj(src, dst)
-
-    lat = int(tile_code[1:3]) * (1 if tile_code[0] == "N" else -1)
-    lon = int(tile_code[4:7]) * (1 if tile_code[3] == "E" else -1)
-    transform = from_bounds(lon, lat, lon + 1, lat + 1, 3601, 3601)
-    profile = dict(
-        driver="GTiff",
-        height=3601,
-        width=3601,
-        count=1,
-        dtype="int16",
-        crs="EPSG:4326",
-        transform=transform,
-        compress="lzw",
-    )
-    data = np.fromfile(hgt_path, ">i2").reshape((3601, 3601))
-    with rasterio.open(dest_tif, "w", **profile) as dst:
-        dst.write(data, 1)
-
-    shutil.rmtree(tmp_dir, ignore_errors=True)
-    logger.info("Saved %s", dest_tif)
+            logger.warning("%s fetch failed – %s", dem, exc)
+    raise RuntimeError("DEM download failed for both SRTMGL1_E and ASTER30m")
 
 
-def _flat_dem(bounds, res_deg=0.0008333):
-    minx, miny, maxx, maxy = bounds
-    nx = max(2, int((maxx - minx) / res_deg))
-    ny = max(2, int((maxy - miny) / res_deg))
-    transform = from_bounds(minx, miny, maxx, maxy, nx, ny)
-    profile = dict(
-        driver="GTiff",
-        height=ny,
-        width=nx,
-        count=1,
-        dtype="int16",
-        crs="EPSG:4326",
-        transform=transform,
-    )
-    mem = rasterio.io.MemoryFile()
-    with mem.open(**profile) as dst:
-        dst.write(np.zeros((1, ny, nx), dtype="int16"))
-    return mem.open()
+def slope_percent(ds: DatasetReader) -> np.ndarray:
+    """
+    Return a %-slope raster (same shape as DEM) using Horn’s method.
+    """
+    band1 = ds.read(1, masked=True).filled(np.nan)
+    dy, dx = np.gradient(band1, ds.res[1], ds.res[0])
+    slope_rad = np.arctan(np.hypot(dx, dy))
+    return np.degrees(slope_rad) * 100 / 45  # % slope (approx.)
 
+# ---------------------------------------------------------------------------#
+# Ruggedness index                                                            #
+# ---------------------------------------------------------------------------#
+def ruggedness_index(ds: DatasetReader) -> float:
+    """
+    Return a single float ∈ [0, 1] describing how rugged the DEM is.
 
-# ---------------------------------------------------------------------------
-# public API
-# ---------------------------------------------------------------------------
-def load_dem(boundary: gpd.GeoSeries, buffer_m: int = 2_000) -> rasterio.DatasetReader:
-    boundary_m = boundary.to_crs(3857).buffer(buffer_m).to_crs(4326)
-    minx, miny, maxx, maxy = boundary_m.total_bounds
-    tiles: List[Path] = []
+    Simple metric: mean(|slope|) / 45°, capped at 1.0.
+    """
+    slope_pct = slope_percent(ds)
+    mean_deg = np.nanmean(slope_pct) * 0.45  # % → degrees (approx.)
+    return max(0.0, min(mean_deg / 45.0, 1.0))
 
-    try:
-        for lat in range(math.floor(miny), math.ceil(maxy)):
-            for lon in range(math.floor(minx), math.ceil(maxx)):
-                code = _tile_name(lat, lon)
-                tif = _DEM_DIR / f"{code}.tif"
-                if not tif.exists():
-                    _download_tile(code, tif)
-                tiles.append(tif)
-    except Exception as exc:  # noqa: BLE001
-        logger.error("DEM fetch failed – %s; using flat terrain", exc)
-        return _flat_dem((minx, miny, maxx, maxy))
-
-    srcs = [rasterio.open(p) for p in tiles]
-    try:
-        mosaic, transform = merge(srcs)
-    finally:
-        for s in srcs:
-            s.close()
-
-    window = win_from_bounds(minx, miny, maxx, maxy, transform)
-    out_h = min(512, int(window.height))
-    out_w = min(512, int(window.width))
-    data = mosaic[
-        :,
-        int(window.row_off) : int(window.row_off + window.height),
-        int(window.col_off) : int(window.col_off + window.width),
-    ]
-    profile = dict(
-        driver="GTiff",
-        height=out_h,
-        width=out_w,
-        count=1,
-        dtype="int16",
-        crs="EPSG:4326",
-        transform=from_bounds(minx, miny, maxx, maxy, out_w, out_h),
-    )
-    mem = rasterio.io.MemoryFile()
-    with mem.open(**profile) as dst:
-        dst.write(data[0], 1, resampling=Resampling.bilinear)
-    return mem.open()
-
-
-def slope_percent(dem: rasterio.DatasetReader) -> np.ndarray:
-    """Return slope (%) using Horn kernel."""
-    band = dem.read(1).astype("float32")
-    # 1-cell central differences
-    dzdx = np.gradient(band, axis=1)
-    dzdy = np.gradient(band, axis=0)
-    slope = np.sqrt(dzdx**2 + dzdy**2)
-    return slope * 100
