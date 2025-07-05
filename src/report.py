@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from .optimise import NetworkDesign
+from .optimise.optimise import NetworkDesign
 
 
 def export_summary(design: NetworkDesign, out_dir: Path) -> Path:
