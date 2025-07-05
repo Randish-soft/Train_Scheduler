@@ -23,7 +23,6 @@ import shapely.geometry as geom
 from shapely.geometry import MultiPolygon, Polygon
 
 from . import OUTPUT_DIR, logger                       # root logger config
-from .demand import estimate_commuters
 from .cost import CostBreakdown, estimate_cost
 from .demand import estimate_demand
 from .enrich import get_city_boundary
