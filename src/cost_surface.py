@@ -7,20 +7,16 @@ Returned objects
 ----------------
 profile : dict      rasterio-style profile with transform + CRS
 cost    : ndarray   float32 array (no-data = np.nan)
-
-The module also re-exports RichDEM as `rd` so routing.py can `import … as rd`.
 """
 
 from __future__ import annotations
-import logging, tempfile, math
+import logging, math
 
-from pathlib import Path
 from typing   import Tuple
-
-import numpy            as np
+import numpy as np
 import rasterio
-from rasterio.enums     import Resampling
-import richdem as rd     # ← heavy C++ lib, import only once and re-export
+from rasterio.enums import Resampling
+import rasterio.mask
 
 log = logging.getLogger("bcpc.costsurf")
 
@@ -31,29 +27,27 @@ def _downsample_slope(dem_ds, factor: int = 3) -> Tuple[dict, np.ndarray]:
     """
     Read DEM, compute %-slope, downsample by `factor` using mean resampling.
     """
-    # 1) slope (@30 m) -------------------------------------------------------
+    # 1) slope (@30 m)
     arr  = dem_ds.read(1, masked=True).filled(np.nan)
     dy, dx = np.gradient(arr, dem_ds.res[1], dem_ds.res[0])
     slope = np.degrees(np.arctan(np.hypot(dx, dy)))     # degrees
 
-    # 2) reproject & downsample to coarser grid -----------------------------
+    # 2) downsample slope
     new_h = math.ceil(slope.shape[0] / factor)
     new_w = math.ceil(slope.shape[1] / factor)
 
-    with rasterio.Env():        # in-memory VRT
+    # Resample with average
+    with rasterio.Env():
         vrt_opts = {
             "driver": "VRT",
             "width" : new_w,
-            "height": new_h,
+            "height": new_w,
             "transform": dem_ds.transform * dem_ds.transform.scale(factor, factor),
             "crs": dem_ds.crs,
         }
         with rasterio.io.MemoryFile() as mem:
             with mem.open(**vrt_opts) as dst:
-                dst.write(
-                    slope[np.newaxis, ...].astype("float32"),
-                    indexes = 1
-                )
+                dst.write(slope[np.newaxis, ...].astype("float32"), indexes=1)
             with mem.open() as ds:
                 slope_ds = ds.read(
                     1,
@@ -91,19 +85,18 @@ def build_cost_surface(boundary_gdf, dem_ds):
     """
     prof, slope = _downsample_slope(dem_ds, factor=3)
 
-    # mask to study-area bbox (+1-cell padding)
     mask_geom   = boundary_gdf.unary_union
     mask_arr, _ = rasterio.mask.mask(
         dem_ds, [mask_geom], crop=True, nodata=np.nan, filled=False
     )
 
-    cost = 1.0 + (slope / 3.0) ** 2          # simple quadratic penalty
-    cost[np.isnan(mask_arr[0])] = np.nan     # outside area → blocked
+    cost = 1.0 + (slope / 3.0) ** 2
+    cost[np.isnan(mask_arr[0])] = np.nan
 
     log.debug("Cost-surface built: %.1f %% cells valid",
               100 * np.isfinite(cost).mean())
     return prof, cost
 
 
-# re-export so routing.py can `from src.cost_surface import rd`
-__all__ = ["build_cost_surface", "rd"]
+# Export only the function
+__all__ = ["build_cost_surface"]
