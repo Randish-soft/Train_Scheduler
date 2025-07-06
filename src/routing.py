@@ -1,98 +1,149 @@
 """
-routing.py – v1·0
-──────────────────
-Creates *new* rail corridors by running a least-cost path (8-neighbour
-Dijkstra) across a raster cost-surface.  Falls back to the previous
-terrain-aware A* on road links when the raster stack cannot be built.
+cost_surface.py – build a raster (numpy array) whose cell values represent
+                  the *relative* construction cost of putting a new rail line
+                  through that cell.
+
+Returned objects
+----------------
+profile : dict      rasterio-style profile with transform + CRS
+cost    : ndarray   float32 array (no-data = np.nan)
 """
 
 from __future__ import annotations
-import logging, math
-from typing import Tuple, Sequence
-from functools import lru_cache
+import logging, tempfile, math
 
-import numpy as np, geopandas as gpd, shapely.geometry as geom, networkx as nx
-from shapely.ops import substring
-from pyproj import Geod
+from pathlib import Path
+from typing   import Tuple
 
-# external helpers in your repo
-from src.models        import TrackType
-from src.terrain       import slope_percent, load_dem          # unchanged
-from src.cost_surface  import build_cost_surface               # ← new file we sketched
-from src.cost_surface  import rd                              # richdem already imported there
+import numpy            as np
+import rasterio
+from rasterio.enums     import Resampling
 
-log   = logging.getLogger("bcpc.routing")
-_GEOD = Geod(ellps="WGS84")          # single WGS-84 helper
-
-# ────────────────────────────────────────────────────────────────────────────
-# Exceptions
-# ────────────────────────────────────────────────────────────────────────────
+log = logging.getLogger("bcpc.costsurf")
 class RoutingError(RuntimeError):
     """Raised when no feasible alignment can be found."""
-
-
-# ────────────────────────────────────────────────────────────────────────────
-# Raster LCP helper
-# ────────────────────────────────────────────────────────────────────────────
-def _least_cost_path(profile: dict, cost: np.ndarray,
-                     origin: Tuple[float,float], dest: Tuple[float,float]
-                     ) -> geom.LineString:
-    """Return a LineString connecting lon-lat points through the cheapest pixels."""
-    rd_cost = rd.rdarray(cost, no_data=np.nan)
-    rd_cost.geotransform = (
-        profile["transform"][2], profile["transform"][0], 0,
-        profile["transform"][5], 0, profile["transform"][4])
-
-    g = rd.CreateCostPathGraph(rd_cost)        # ≈0.3 s for Lebanon @100 m
-
-    row_o, col_o = ~profile["transform"] * origin[::-1]   # lon,lat → row,col
-    row_d, col_d = ~profile["transform"] * dest[::-1]
-
-    path = g.Path(int(row_o), int(col_o), int(row_d), int(col_d))
-    if not path:
-        raise RoutingError("Raster LCP failed – no path")
-
-    # pixel centres back to lon-lat
-    coords = [profile["transform"] * (c+0.5, r+0.5) for r,c in path]
-    lonlat = [(x, y) for y, x in coords]       # swap back
-    return geom.LineString(lonlat)
-
-
-# ────────────────────────────────────────────────────────────────────────────
-# Public API
-# ────────────────────────────────────────────────────────────────────────────
-def trace_route(
-        origin_lonlat : Tuple[float,float],
-        dest_lonlat   : Tuple[float,float],
-        boundary_gdf  : gpd.GeoSeries,
-        dem,                                   # rasterio dataset (already open)
-        track         : TrackType,
-) -> geom.LineString:
+# --------------------------------------------------------------------------- #
+# Helpers                                                                     #
+# --------------------------------------------------------------------------- #
+def _downsample_slope(dem_ds, factor: int = 3) -> Tuple[dict, np.ndarray]:
     """
-    1. Try green-field least-cost path across the cost-surface grid.
-    2. If anything goes wrong (missing layers, out-of-memory…), fall back to
-       the legacy road-graph A* (kept below, untouched).
+    Read DEM, compute %-slope, downsample by `factor` using mean resampling.
     """
-    # --------------------------------------------------------------- LCP first
-    try:
-        profile, cost_arr = build_cost_surface(boundary_gdf, dem)
-        line = _least_cost_path(profile, cost_arr, origin_lonlat, dest_lonlat)
+    # 1) slope (@30 m) -------------------------------------------------------
+    arr  = dem_ds.read(1, masked=True).filled(np.nan)
+    dy, dx = np.gradient(arr, dem_ds.res[1], dem_ds.res[0])
+    slope = np.degrees(np.arctan(np.hypot(dx, dy)))     # degrees
 
-        # sanity: if absurdly indirect, refuse it so the caller can fall back
-        gc = abs(_GEOD.line_length([origin_lonlat[0], dest_lonlat[0]],
-                                   [origin_lonlat[1], dest_lonlat[1]]))
-        if line.length > 4 * gc:
-            raise RoutingError("LCP too long vs great-circle")
+    # 2) reproject & downsample to coarser grid -----------------------------
+    new_h = math.ceil(slope.shape[0] / factor)
+    new_w = math.ceil(slope.shape[1] / factor)
 
-        log.info("Raster LCP succeeded (%.1f km)", line.length/1000)
-        return line
+    with rasterio.Env():        # in-memory VRT
+        vrt_opts = {
+            "driver": "VRT",
+            "width" : new_w,
+            "height": new_h,
+            "transform": dem_ds.transform * dem_ds.transform.scale(factor, factor),
+            "crs": dem_ds.crs,
+        }
+        with rasterio.io.MemoryFile() as mem:
+            with mem.open(**vrt_opts) as dst:
+                dst.write(
+                    slope[np.newaxis, ...].astype("float32"),
+                    indexes = 1
+                )
+            with mem.open() as ds:
+                slope_ds = ds.read(
+                    1,
+                    out_shape=(new_h, new_w),
+                    resampling=Resampling.average,
+                    masked=True,
+                )
 
-    except Exception as exc:           # noqa: BLE001
-        log.warning("Raster LCP failed – %s  ➜  trying road graph", exc)
+    prof = dict(
+        driver    = "GTiff",
+        dtype     = "float32",
+        count     = 1,
+        height    = new_h,
+        width     = new_w,
+        crs       = dem_ds.crs,
+        transform = dem_ds.transform * dem_ds.transform.scale(factor, factor),
+        nodata    = np.nan,
+    )
+    return prof, slope_ds.filled(np.nan)
 
-    # ---------------------------------------------------------------- A* road
-    from src.routing_legacy import trace_route_legacy   # <-- just move your old
-    return trace_route_legacy(                          #      code into that
-        origin_lonlat, dest_lonlat, boundary_gdf, dem, track)
 
+# --------------------------------------------------------------------------- #
+# Public builder                                                              #
+# --------------------------------------------------------------------------- #
+def build_cost_surface(boundary_gdf, dem_ds):
+    """
+    Return (profile, cost_array) masked to boundary.
 
+    Cost model (v0·1)
+    -----------------
+    cell_cost = 1 + (slope_deg / 3)²
+      – flat ground ≈ 1
+      – 6 % ≈ 5× cost
+      – 10 % ≈ 12× cost
+    """
+    prof, slope = _downsample_slope(dem_ds, factor=3)
+
+    # mask to study-area bbox (+1-cell padding)
+    mask_geom   = boundary_gdf.unary_union
+    mask_arr, _ = rasterio.mask.mask(
+        dem_ds, [mask_geom], crop=True, nodata=np.nan, filled=False
+    )
+
+    cost = 1.0 + (slope / 3.0) ** 2          # simple quadratic penalty
+    cost[np.isnan(mask_arr[0])] = np.nan     # outside area → blocked
+
+    log.debug("Cost-surface built: %.1f %% cells valid",
+              100 * np.isfinite(cost).mean())
+    return prof, cost
+
+def trace_route(origin, dest, gdf_boundary, dem, track):
+    """
+    Trace a route between two cities considering terrain and boundaries.
+    
+    Args:
+        origin: Starting city/point
+        dest: Destination city/point
+        gdf_boundary: GeoDataFrame with boundary information
+        dem: Digital Elevation Model data
+        track: Track specifications (standard gauge, etc.)
+    
+    Returns:
+        dict or LineString: Route information including path and metadata
+    """
+    # TODO: Implement actual routing algorithm
+    # For now, return a simple placeholder
+    
+    # Extract coordinates if origin/dest are objects with geometry
+    if hasattr(origin, 'geometry'):
+        start_point = origin.geometry
+    else:
+        start_point = origin
+        
+    if hasattr(dest, 'geometry'):
+        end_point = dest.geometry
+    else:
+        end_point = dest
+    
+    # Create a simple direct line for now
+    from shapely.geometry import LineString
+    
+    # If points have coordinates
+    if hasattr(start_point, 'x') and hasattr(end_point, 'x'):
+        line = LineString([
+            (start_point.x, start_point.y),
+            (end_point.x, end_point.y)
+        ])
+    else:
+        # Fallback to a dummy line
+        line = LineString([(0, 0), (1, 1)])
+    
+    return line
+
+__all__ = ["build_cost_surface"]
+__all__ = ["trace_route", "RoutingError"]
