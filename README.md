@@ -1,6 +1,6 @@
 # Train Scheduler
 
-A Python-based train scheduling application that processes city data to generate optimized train schedules. This project focuses on Lebanese cities and provides scheduling capabilities for train route planning.
+A Python-based train scheduling application that processes city data to generate optimized train schedules, types, rail manouvering, etc. 
 
 ## 🚂 Overview
 
