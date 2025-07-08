@@ -36,14 +36,6 @@ poetry install
 
 ### Basic Usage
 
-Run the scheduler with the default Lebanese cities dataset:
-
-```bash
-poetry run python -m src --csv input/lebanon_cities_2024.csv
-```
-
-### Custom Dataset
-
 You can use your own CSV file with city data:
 
 ```bash
@@ -102,10 +94,10 @@ Contributions are welcome! Please feel free to submit a Pull Request. For major 
 
 - [ ] Add support for multiple transportation modes
 - [ ] Implement real-time schedule updates
-- [ ] Add visualization of train routes
+- [X] Add visualization of train routes
 - [ ] Support for international routes
 - [ ] API endpoint for schedule queries
-- [ ] Integration with mapping services
+- [X] Integration with mapping services
 
 ## 🐛 Known Issues
 
@@ -113,7 +105,7 @@ Contributions are welcome! Please feel free to submit a Pull Request. For major 
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under private licencing
 
 ## 👤 Author
 
@@ -121,10 +113,6 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 - GitHub: [@MiguelIbrahimE](https://github.com/MiguelIbrahimE)
 
-## 🙏 Acknowledgments
-
-- Thanks to all contributors who have helped with this project
-- Special thanks to the open-source community for the tools and libraries used
 
 ---
 
