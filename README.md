@@ -18,6 +18,8 @@ The Train Scheduler is a command-line application that reads city data from CSV 
 - Python 3.8 or higher
 - Poetry (for dependency management)
 
+If You are using Docker devcontainer then you need Docker Destop.
+
 ## 🚀 Installation
 
 1. Clone the repository:
