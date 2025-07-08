@@ -4,7 +4,7 @@ A Python-based train scheduling application that processes city data to generate
 
 ## 🚂 Overview
 
-The Train Scheduler is a command-line application that reads city data from CSV files and generates train schedules. It's designed to help with route planning and optimization for train services between Lebanese cities.
+The Train Scheduler is a command-line application that reads city data from CSV files and generates train schedules. It's designed to help with route planning and optimization for train services between  cities of countries that do not have railway(s) or for countries that have existing networks but want to expand their network.
 
 ## 🔧 Features
 
