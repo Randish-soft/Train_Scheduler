@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import List
-
+from dataclasses import dataclass
 
 class Gauge(Enum):
     STANDARD = 1_435
@@ -53,6 +53,17 @@ class StationProfile:
     tracks: int = 2
     platforms: List[int] = field(default_factory=lambda: [180])
 
+@dataclass
+class CityNode:
+    """Represents a city in the network"""
+    name: str
+    code: str
+    lat: float
+    lon: float
+    population: int
+    elevation: float = 0
+    importance_score: float = 0
+    
 def suggest_train_model(distance_km: float) -> TrainType:
     """
     Heuristic selection of train model based on route distance.
