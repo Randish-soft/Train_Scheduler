@@ -32,7 +32,9 @@ from dataclasses import dataclass, field
 from shapely.geometry import LineString
 
 from dataclasses import dataclass
-
+from dotenv import load_dotenv
+import os
+load_dotenv()
 log = logging.getLogger("bcpc.intercity")
 
 
@@ -57,8 +59,6 @@ class RailConnection:
     is_tunnel: bool
     geometry: LineString = field(compare=False, hash=False)  # exclude from hash/eq
     priority_score: float = 0
-
-
 
 
 class IntercityNetworkPlanner:
@@ -144,46 +144,63 @@ class IntercityNetworkPlanner:
         return total_cost, needs_tunnel
     
     def generate_all_possible_connections(self) -> List[RailConnection]:
-        """Generate all possible connections between cities"""
         connections = []
-        
+        gdf_cities = gpd.GeoDataFrame(
+            [{'geometry': Point(c.lon, c.lat)} for c in self.cities.values()],
+            crs="EPSG:4326"
+        )
+        dem = load_dem(gdf_cities)
+
         for city1, city2 in combinations(self.cities.values(), 2):
-            distance = geodesic((city1.lat, city1.lon), (city2.lat, city2.lon)).km
-            
-            # Skip very long connections (>200km) unless they're critical
-            if distance > 200 and not (city1.importance_score > 0.7 or city2.importance_score > 0.7):
+            origin = (city1.lon, city1.lat)
+            dest = (city2.lon, city2.lat)
+
+            try:
+                geometry = trace_route(origin, dest, gdf_cities, dem)
+            except Exception as e:
+                log.warning(f"Routing failed for {city1.name}–{city2.name}: {e}")
                 continue
-            
-            cost, is_tunnel = self.calculate_connection_cost(city1, city2)
-            elevation_change = abs(city1.elevation - city2.elevation)
-            
-            # Create geometry
-            geometry = LineString([
-                (city1.lon, city1.lat),
-                (city2.lon, city2.lat)
-            ])
-            
-            # Calculate priority score
+
+            # Distance from geometry
+            distance_km = geometry.length * 111  # approx deg to km
+
+            # Elevation profile
+            elev_start = dem.read(1)[dem.index(city1.lon, city1.lat)]
+            elev_end   = dem.read(1)[dem.index(city2.lon, city2.lat)]
+            elevation_change = abs(elev_start - elev_end)
+
+            # Tunnel check
+            is_mountainous = elevation_change > 500
+            is_tunnel = is_mountainous
+
+            # Cost estimation
+            base_cost_per_km = 15
+            terrain_multiplier = 1 + (elevation_change / 1000) * 2
+            if is_tunnel:
+                terrain_multiplier *= 3
+
+            cost = distance_km * base_cost_per_km * terrain_multiplier
+
+            # Priority score
             population_factor = (city1.population + city2.population) / 1_000_000
-            distance_factor = 1 / (1 + distance / 100)  # Prefer shorter connections
+            distance_factor = 1 / (1 + distance_km / 100)
             importance_factor = (city1.importance_score + city2.importance_score) / 2
-            
             priority = population_factor * 0.4 + distance_factor * 0.3 + importance_factor * 0.3
-            
+
             connection = RailConnection(
                 city1=city1.code,
                 city2=city2.code,
-                distance_km=distance,
+                distance_km=distance_km,
                 elevation_change=elevation_change,
                 cost_millions=cost,
                 is_tunnel=is_tunnel,
                 geometry=geometry,
                 priority_score=priority
             )
-            
             connections.append(connection)
-        
+
         return connections
+
     
     def optimize_network_mst(self) -> List[RailConnection]:
         """Use Minimum Spanning Tree algorithm for basic connectivity"""
