@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass
 from itertools import combinations
+from src.models import CityNode
 
 import numpy as np
 import pandas as pd
@@ -20,13 +21,17 @@ from geopy.distance import geodesic
 from scipy.spatial import distance_matrix
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import minimum_spanning_tree
-
+from src.models import CityNode
 from .scenario_io import load_scenario, save_geojson
 from .models import TrackType, TrainType, Gauge
 from .cost import estimate_cost
 from .terrain import load_dem
 from .routing import trace_route
 from . import OUTPUT_DIR
+from dataclasses import dataclass, field
+from shapely.geometry import LineString
+
+from dataclasses import dataclass
 
 log = logging.getLogger("bcpc.intercity")
 
@@ -42,30 +47,18 @@ CITY_COORDINATES = {
     'LB-ALT': {'name': 'Aley', 'lat': 33.8106, 'lon': 35.5972}
 }
 
-
-@dataclass
-class CityNode:
-    """Represents a city in the network"""
-    name: str
-    code: str
-    lat: float
-    lon: float
-    population: int
-    elevation: float = 0
-    importance_score: float = 0
-
-
-@dataclass
+@dataclass(frozen=True, eq=True)
 class RailConnection:
-    """Represents a connection between two cities"""
     city1: str
     city2: str
     distance_km: float
     elevation_change: float
     cost_millions: float
     is_tunnel: bool
-    geometry: LineString
+    geometry: LineString = field(compare=False, hash=False)  # exclude from hash/eq
     priority_score: float = 0
+
+
 
 
 class IntercityNetworkPlanner:
