@@ -11,7 +11,7 @@ The Train Scheduler is a command-line application that reads city data from CSV 
 - **CSV Data Processing**: Reads city information from CSV files
 - **Flexible Input**: Supports custom CSV files for different city datasets
 - **Command-line Interface**: Easy to use CLI for schedule generation
-- **Lebanese Cities Support**: Includes pre-configured data for Lebanon cities (2024)
+- **HTML Live Building**: Code Builds a Live HTML map for the cities And/Or countries you are trying to connect
 
 ## 📋 Prerequisites
 
