@@ -353,7 +353,13 @@ def plan_intercity_network(csv_path: str, output_path: str,
     # Create planner and plan network
     planner = IntercityNetworkPlanner(cities, budget_millions)
     result = planner.plan_network()
-    
+    # Decide track type based on terrain or tunnel flag
+    if conn.is_tunnel:
+        track_type = "tunnel"
+    elif conn.elevation_change > 200:
+        track_type = "elevated"
+    else:
+        track_type = "ground"
     # Convert to GeoDataFrame
     connections_data = []
     for conn in result['connections']:
@@ -367,6 +373,7 @@ def plan_intercity_network(csv_path: str, output_path: str,
             'priority': conn.priority_score,
             'elevation_change': conn.elevation_change
         })
+
     
     gdf = gpd.GeoDataFrame(connections_data, crs='EPSG:4326')
     
