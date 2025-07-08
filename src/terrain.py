@@ -94,22 +94,26 @@ def _flat_memory_dem() -> DatasetReader:
 
 
 def load_dem(boundary_gdf) -> DatasetReader:
-    """
-    Return a rasterio dataset covering the boundary.
-
-    Tries SRTMGL1_E then ASTER30m. If both fail, falls back to a synthetic
-    flat 100 × 100 DEM so the rest of the pipeline can proceed.
-    """
     n, s, w, e = _bbox_from_gdf(boundary_gdf)
     for dem in ("SRTMGL1_E", "ASTER30m"):
         try:
-            ds = rasterio.open(_download_dem(n, s, w, e, dem))
-            return ds
-        except Exception as exc:       # noqa: BLE001
+            disk_path = _download_dem(n, s, w, e, dem)
+            with rasterio.open(disk_path) as src:
+                profile = src.profile
+                data = src.read()
+
+            memfile = MemoryFile()
+            with memfile.open(**profile) as dst:
+                dst.write(data)
+
+            return memfile.open()
+        except Exception as exc:
             logger.warning("%s fetch failed – %s", dem, exc)
 
     logger.error("DEM fetch failed – using synthetic flat DEM (0 m)")
     return _flat_memory_dem()
+
+
 
 
 def slope_percent(ds: DatasetReader) -> np.ndarray:

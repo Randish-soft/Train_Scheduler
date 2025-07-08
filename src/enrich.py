@@ -179,3 +179,19 @@ def build_candidate_corridors(boundary: Polygon) -> gpd.GeoDataFrame:
     except (ImportError, AttributeError, TypeError):
         logger.debug("hexbin unavailable – using fallback generator")
         return _fallback_hex_grid(boundary, 5_000)
+
+def fetch_city_boundary(city_name: str, country: str = "Lebanon") -> gpd.GeoDataFrame:
+    """
+    Fetches administrative boundary of a city using OSM Nominatim.
+    """
+    try:
+        place = f"{city_name}, {country}"
+        gdf = ox.geocode_to_gdf(place)
+        gdf = gdf[gdf.geometry.type.isin(["Polygon", "MultiPolygon"])]
+        gdf = gdf.set_crs("EPSG:4326")
+        return gdf
+    except Exception as e:
+        raise RuntimeError(f"Failed to fetch boundary for {city_name}: {e}")
+
+
+__all__ = ["fetch_city_boundary"]
