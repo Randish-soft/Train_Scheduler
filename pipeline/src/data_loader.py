@@ -43,14 +43,14 @@ class DataLoader:
         
         # Required columns in CSV
         self.required_columns = [
-            'name', 'population', 'latitude', 'longitude', 
-            'tourism_index', 'budget', 'region', 'country'
+            'city_name', 'population', 'latitude', 'longitude', 
+            'tourism_index', 'budget_total_eur'
         ]
         
         # Optional columns
         self.optional_columns = [
-            'elevation', 'administrative_level', 'gdp_per_capita',
-            'transport_connectivity', 'environmental_score'
+            'city_id', 'daily_commuters', 'terrain_ruggedness',
+            'elevation', 'administrative_level'
         ]
     
     def load_csv(self, csv_path: str) -> List[CityData]:
@@ -131,12 +131,12 @@ class DataLoader:
         # Remove empty rows
         df_clean = df_clean.dropna(how='all')
         
-        # Clean city names
-        df_clean['name'] = df_clean['name'].astype(str).str.strip()
-        df_clean = df_clean[df_clean['name'] != '']
+        # Clean city names using the correct column name
+        df_clean['city_name'] = df_clean['city_name'].astype(str).str.strip()
+        df_clean = df_clean[df_clean['city_name'] != '']
         
         # Validate and clean numeric columns
-        numeric_columns = ['population', 'latitude', 'longitude', 'tourism_index', 'budget']
+        numeric_columns = ['population', 'latitude', 'longitude', 'tourism_index', 'budget_total_eur']
         for col in numeric_columns:
             if col in df_clean.columns:
                 df_clean[col] = self._clean_numeric_column(df_clean[col], col)
@@ -150,9 +150,9 @@ class DataLoader:
         # Fill missing values with forward fill strategy
         df_clean = self._forward_fill_missing_values(df_clean)
         
-        # Remove duplicates
+        # Remove duplicates (use city_name instead of name)
         initial_count = len(df_clean)
-        df_clean = df_clean.drop_duplicates(subset=['name'], keep='first')
+        df_clean = df_clean.drop_duplicates(subset=['city_name'], keep='first')
         if len(df_clean) < initial_count:
             logger.warning(f"Removed {initial_count - len(df_clean)} duplicate cities")
         
@@ -223,28 +223,29 @@ class DataLoader:
         """
         logger.info("Forward filling missing values...")
         
-        # Group by region/country for similar cities
-        for region in df['region'].unique():
-            if pd.isna(region):
-                continue
+        # Group by region/country for similar cities (skip if no region column)
+        if 'region' in df.columns:
+            for region in df['region'].unique():
+                if pd.isna(region):
+                    continue
+                    
+                region_mask = df['region'] == region
+                region_df = df[region_mask]
                 
-            region_mask = df['region'] == region
-            region_df = df[region_mask]
-            
-            # Fill missing budget values with regional median
-            if 'budget' in df.columns:
-                budget_median = region_df['budget'].median()
-                if not pd.isna(budget_median):
-                    df.loc[region_mask, 'budget'] = df.loc[region_mask, 'budget'].fillna(budget_median)
-            
-            # Fill missing tourism index with regional median
-            if 'tourism_index' in df.columns:
-                tourism_median = region_df['tourism_index'].median()
-                if not pd.isna(tourism_median):
-                    df.loc[region_mask, 'tourism_index'] = df.loc[region_mask, 'tourism_index'].fillna(tourism_median)
+                # Fill missing budget values with regional median
+                if 'budget_total_eur' in df.columns:
+                    budget_median = region_df['budget_total_eur'].median()
+                    if not pd.isna(budget_median):
+                        df.loc[region_mask, 'budget_total_eur'] = df.loc[region_mask, 'budget_total_eur'].fillna(budget_median)
+                
+                # Fill missing tourism index with regional median
+                if 'tourism_index' in df.columns:
+                    tourism_median = region_df['tourism_index'].median()
+                    if not pd.isna(tourism_median):
+                        df.loc[region_mask, 'tourism_index'] = df.loc[region_mask, 'tourism_index'].fillna(tourism_median)
         
         # Fill remaining missing values with global medians
-        numeric_columns = ['population', 'tourism_index', 'budget']
+        numeric_columns = ['population', 'tourism_index', 'budget_total_eur']
         for col in numeric_columns:
             if col in df.columns:
                 global_median = df[col].median()
@@ -261,14 +262,14 @@ class DataLoader:
         for _, row in df.iterrows():
             try:
                 city = CityData(
-                    name=str(row['name']),
+                    name=str(row['city_name']),
                     population=int(row['population']) if not pd.isna(row['population']) else 0,
                     latitude=float(row['latitude']) if not pd.isna(row['latitude']) else 0.0,
                     longitude=float(row['longitude']) if not pd.isna(row['longitude']) else 0.0,
                     tourism_index=float(row['tourism_index']) if not pd.isna(row['tourism_index']) else 0.0,
-                    budget=float(row['budget']) if not pd.isna(row['budget']) else 0.0,
-                    region=str(row['region']) if not pd.isna(row['region']) else '',
-                    country=str(row['country']) if not pd.isna(row['country']) else '',
+                    budget=float(row['budget_total_eur']) if not pd.isna(row['budget_total_eur']) else 0.0,
+                    region=str(row.get('region', row.get('city_name', 'Unknown'))),
+                    country=str(row.get('country', 'Unknown')),
                     elevation=float(row['elevation']) if 'elevation' in row and not pd.isna(row['elevation']) else None,
                     administrative_level=str(row['administrative_level']) if 'administrative_level' in row and not pd.isna(row['administrative_level']) else None
                 )
