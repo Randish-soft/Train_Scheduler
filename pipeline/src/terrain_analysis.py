@@ -218,7 +218,41 @@ class TerrainAnalyzer:
             dem_source=actual_source,
             resolution_meters=self.preferred_resolution
         )
-    
+    # ── pipeline/src/terrain_analysis.py ───────────────────────────────────────────
+    def _download_from_openelevation(self,
+                                     west: float,
+                                     south: float,
+                                     east: float,
+                                     north: float
+    ) -> Tuple[np.ndarray, rasterio.transform.Affine]:
+        """
+        Coarse fallback DEM built from the free Open-Elevation service.
+        The API accepts max 100 locations per request, so we chunk.
+        """
+        step = 0.0025           # ≈ 250 m spacing
+        lats = np.arange(south, north + step, step)
+        lons = np.arange(west,  east  + step, step)
+
+        coords = [(lat, lon) for lat in lats for lon in lons]
+        CHUNK = 100             # OE hard limit
+
+        def _fetch(chunk: list[tuple[float, float]]) -> list[float]:
+            locs = "|".join(f"{lat},{lon}" for lat, lon in chunk)
+            url = f"https://api.open-elevation.com/api/v1/lookup?locations={locs}"
+            r = requests.get(url, timeout=120)
+            r.raise_for_status()
+            return [pt["elevation"] for pt in r.json()["results"]]
+
+        elevations = np.concatenate([_fetch(coords[i:i + CHUNK])
+                                     for i in range(0, len(coords), CHUNK)]
+                                    ).astype(np.float32)
+
+        raw = elevations.reshape(len(lats), len(lons))
+        transform = from_bounds(west, south, east, north,
+                                raw.shape[1], raw.shape[0])
+        return raw, transform
+
+
     def analyze_station_terrain(self, 
                               station_locations: List[Point],
                               route_line: LineString,
@@ -307,15 +341,10 @@ class TerrainAnalyzer:
         
         # Try multiple elevation services in order of preference
         elevation_services = [
-            ("OpenTopography", self._download_dem_from_opentopography, [
-                dem_source if dem_source else DEMSource.SRTMGL1,
-                DEMSource.COP30,
-                DEMSource.ASTER,
-                DEMSource.SRTMGL3
-            ]),
-            ("NASA Earthdata", self._download_from_nasa_earthdata, [None]),
-            ("OpenElevation", self._download_from_openelevation, [None])
+            ("OpenTopoData",   self._download_from_opentopodata,   [None]),   # free, no key
+            ("OpenElevation",  self._download_from_openelevation,  [None])    # fallback
         ]
+
 
         for service_name, download_func, sources in elevation_services:
             logger.info(f"Trying {service_name} for DEM data...")
@@ -354,6 +383,9 @@ class TerrainAnalyzer:
                                         dem_source: DEMSource) -> Tuple[np.ndarray, rasterio.transform.Affine]:
         """Download DEM data from OpenTopography API"""
         
+        if not self.api_key:
+            raise RuntimeError("OPENTOPOGRAPHY_API_KEY not set – skipping")
+
         # API parameters
         params = {
             'demtype': dem_source.value,
@@ -366,7 +398,7 @@ class TerrainAnalyzer:
         }
         
         # Make API request
-        response = requests.get(OPENTOPOGRAPHY_BASE_URL, params=params, timeout=300)
+        response = requests.get(OPENTOPOGRAPHY_BASE_URL, params=params, timeout=30)
         response.raise_for_status()
         
         # Save temporary file
