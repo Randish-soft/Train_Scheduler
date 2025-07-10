@@ -1,28 +1,20 @@
-# .devcontainer/Dockerfile -----------------------------------------------
-    FROM mambaorg/micromamba:1.5.7-base   #  ↳ already has a conda “base” env
+# Use a slim Python image
+FROM python:3.11-slim-bullseye
 
-    ENV MAMBA_DOCKERFILE_ACTIVATE=1 \
-        CONDA_PKGS_DIRS=/opt/conda/pkgs \
-        POETRY_HOME=/opt/poetry \
-        POETRY_VIRTUALENVS_CREATE=false \
-        PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
-    
-    # ------------------------------------------------------------------ deps --
-    RUN micromamba install -y -n base -c conda-forge \
-          python=3.10 richdem=0.3.4 gdal proj geos libspatialindex graphviz \
-     && micromamba clean -ay
-    
-    # ---------------------------------------------------------------- Poetry --
-    RUN curl -sSL https://install.python-poetry.org | python - \
-     && ln -s $POETRY_HOME/bin/poetry /usr/local/bin/poetry
-    
-    WORKDIR /workspace
-    COPY pyproject.toml poetry.lock* ./
-    RUN poetry install -E terrain --no-interaction --no-ansi
-    
-    # copy code last
-    COPY . .
-    
-    EXPOSE 3000 8888
-    CMD ["bash"]
-    
+# Avoid interactive prompts during package install
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl build-essential git \
+    gdal-bin libgdal-dev python3-dev \
+    && apt-get clean
+
+# Set working directory
+WORKDIR /workspace
+
+# ✅ Copy requirements.txt from inside .devcontainer
+COPY --chown=railway:railway .devcontainer/requirements.txt ./requirements.txt
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
