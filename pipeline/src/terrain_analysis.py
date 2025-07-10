@@ -4,10 +4,10 @@ BCPC Pipeline - Terrain Analysis Module
 
 This module provides comprehensive terrain analysis for railway route planning,
 including elevation profiles, slope calculations, terrain complexity assessment,
-and integration with OpenTopography API for global DEM data.
+and integration with OpenElevation API for global DEM data.
 
 Features:
-- OpenTopography API integration with multiple DEM sources
+- OpenElevation API integration (free, no API key required)
 - Terrain complexity classification for cost analysis
 - Slope and curvature analysis for engineering constraints
 - Tunnel and bridge requirement identification
@@ -48,18 +48,10 @@ warnings.filterwarnings('ignore', category=rasterio.errors.NotGeoreferencedWarni
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# OpenTopography API configuration
-OPENTOPOGRAPHY_API_KEY = "153e670200e6b3568ff813c994fda446"
-OPENTOPOGRAPHY_BASE_URL = "https://cloud.sdsc.edu/v1/datasetAccess/raster"
-
 class DEMSource(Enum):
-    """Available DEM data sources from OpenTopography"""
-    SRTMGL1 = "SRTMGL1"          # SRTM Global 1 arc-second (~30m)
-    SRTMGL3 = "SRTMGL3"          # SRTM Global 3 arc-second (~90m)
-    ASTER = "ALOS"               # ASTER Global DEM v3 (~30m)
-    ALOS = "ALOS"                # ALOS World 3D (~30m)
-    COP30 = "COP30"              # Copernicus DEM GLO-30 (~30m)
-    COP90 = "COP90"              # Copernicus DEM GLO-90 (~90m)
+    """Available DEM data sources"""
+    OPENELEVATION = "OpenElevation"  # Free API, no key required
+    FLAT = "Flat"                    # Fallback flat terrain
 
 class TerrainComplexity(Enum):
     """Terrain complexity classification for cost analysis"""
@@ -133,27 +125,22 @@ class StationTerrainContext:
     construction_cost_factor: float
 
 class TerrainAnalyzer:
-    
-   
     """
-    Main terrain analysis engine for BCPC railway projects
+    Main terrain analysis engine for BCPC railway projects using OpenElevation API
     """
     
     def __init__(self, 
                  cache_dir: str = "data/_cache/terrain",
-                 api_key: str = OPENTOPOGRAPHY_API_KEY,
-                 preferred_resolution: float = 30.0):
+                 preferred_resolution: float = 250.0):
         """
         Initialize terrain analyzer
         
         Args:
             cache_dir: Directory for caching DEM data
-            api_key: OpenTopography API key
-            preferred_resolution: Preferred DEM resolution in meters
+            preferred_resolution: Preferred DEM resolution in meters (250m for OpenElevation)
         """
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        self.api_key = api_key
         self.preferred_resolution = preferred_resolution
         
         # Analysis parameters
@@ -161,12 +148,6 @@ class TerrainAnalyzer:
         self.segment_length_km = 5.0        # km length for terrain segments
         self.slope_smoothing_window = 5     # number of points for slope smoothing
         
-    def _download_from_nasa_earthdata(self, west: float, south: float, east: float, north: float) -> Tuple[np.ndarray, rasterio.transform.Affine]:
-        """Download SRTM data from NASA Earthdata (placeholder implementation)"""
-        # For now, raise an exception to fall back to next service
-        # You can implement the full NASA Earthdata logic here later
-        raise NotImplementedError("NASA Earthdata implementation not yet complete")
-    
     def analyze_route_terrain(self, 
                             route_line: LineString,
                             buffer_km: float = 2.0,
@@ -218,41 +199,7 @@ class TerrainAnalyzer:
             dem_source=actual_source,
             resolution_meters=self.preferred_resolution
         )
-    # ── pipeline/src/terrain_analysis.py ───────────────────────────────────────────
-    def _download_from_openelevation(self,
-                                     west: float,
-                                     south: float,
-                                     east: float,
-                                     north: float
-    ) -> Tuple[np.ndarray, rasterio.transform.Affine]:
-        """
-        Coarse fallback DEM built from the free Open-Elevation service.
-        The API accepts max 100 locations per request, so we chunk.
-        """
-        step = 0.0025           # ≈ 250 m spacing
-        lats = np.arange(south, north + step, step)
-        lons = np.arange(west,  east  + step, step)
-
-        coords = [(lat, lon) for lat in lats for lon in lons]
-        CHUNK = 100             # OE hard limit
-
-        def _fetch(chunk: list[tuple[float, float]]) -> list[float]:
-            locs = "|".join(f"{lat},{lon}" for lat, lon in chunk)
-            url = f"https://api.open-elevation.com/api/v1/lookup?locations={locs}"
-            r = requests.get(url, timeout=120)
-            r.raise_for_status()
-            return [pt["elevation"] for pt in r.json()["results"]]
-
-        elevations = np.concatenate([_fetch(coords[i:i + CHUNK])
-                                     for i in range(0, len(coords), CHUNK)]
-                                    ).astype(np.float32)
-
-        raw = elevations.reshape(len(lats), len(lons))
-        transform = from_bounds(west, south, east, north,
-                                raw.shape[1], raw.shape[0])
-        return raw, transform
-
-
+    
     def analyze_station_terrain(self, 
                               station_locations: List[Point],
                               route_line: LineString,
@@ -336,89 +283,88 @@ class TerrainAnalyzer:
             with rasterio.open(cache_path) as src:
                 dem_array = src.read(1)
                 dem_transform = src.transform
-                actual_source = DEMSource.SRTMGL1  # Default assumption for cached data
+                actual_source = DEMSource.OPENELEVATION  # Default assumption for cached data
                 return dem_array, dem_transform, actual_source
         
-        # Try multiple elevation services in order of preference
-        elevation_services = [
-            ("OpenTopoData",   self._download_from_opentopodata,   [None]),   # free, no key
-            ("OpenElevation",  self._download_from_openelevation,  [None])    # fallback
-        ]
-
-
-        for service_name, download_func, sources in elevation_services:
-            logger.info(f"Trying {service_name} for DEM data...")
-            
-            if service_name == "OpenTopography":
-                # Try multiple DEM sources for OpenTopography
-                for source in sources:
-                    try:
-                        logger.info(f"Downloading from {service_name} ({source.value if source else 'default'})")
-                        dem_array, dem_transform = download_func(west, south, east, north, source)
-                        self._cache_dem(dem_array, dem_transform, cache_path, west, south, east, north)
-                        logger.info(f"✅ Successfully downloaded DEM from {service_name} ({source.value})")
-                        return dem_array, dem_transform, source
-                    except Exception as e:
-                        logger.warning(f"❌ {service_name} ({source.value}) failed: {e}")
-                        continue
-            else:
-                # Try other services (NASA, OpenElevation)
-                try:
-                    logger.info(f"Downloading from {service_name}")
-                    dem_array, dem_transform = download_func(west, south, east, north)
-                    self._cache_dem(dem_array, dem_transform, cache_path, west, south, east, north)
-                    logger.info(f"✅ Successfully downloaded DEM from {service_name}")
-                    return dem_array, dem_transform, DEMSource.SRTMGL1
-                except Exception as e:
-                    logger.warning(f"❌ {service_name} failed: {e}")
-                    continue
-
-        # If all services fail, create a flat DEM
-        logger.warning("⚠️  All elevation services failed, using flat terrain assumption")
-        return self._create_flat_dem(west, south, east, north)
+        # Try OpenElevation API
+        try:
+            logger.info("Downloading elevation data from OpenElevation API")
+            dem_array, dem_transform = self._download_from_openelevation(west, south, east, north)
+            self._cache_dem(dem_array, dem_transform, cache_path, west, south, east, north)
+            logger.info("✅ Successfully downloaded DEM from OpenElevation")
+            return dem_array, dem_transform, DEMSource.OPENELEVATION
+        except Exception as e:
+            logger.warning(f"❌ OpenElevation API failed: {e}")
+            logger.warning("⚠️  Falling back to flat terrain assumption")
+            return self._create_flat_dem(west, south, east, north)
     
-    def _download_dem_from_opentopography(self,
-                                        west: float, south: float,
-                                        east: float, north: float,
-                                        dem_source: DEMSource) -> Tuple[np.ndarray, rasterio.transform.Affine]:
-        """Download DEM data from OpenTopography API"""
+    def _download_from_openelevation(self, west: float, south: float, east: float, north: float) -> Tuple[np.ndarray, rasterio.transform.Affine]:
+        """Download elevation data from OpenElevation API"""
+        import time
         
-        if not self.api_key:
-            raise RuntimeError("OPENTOPOGRAPHY_API_KEY not set – skipping")
-
-        # API parameters
-        params = {
-            'demtype': dem_source.value,
-            'west': west,
-            'south': south,
-            'east': east,
-            'north': north,
-            'outputFormat': 'GTiff',
-            'API_Key': self.api_key
-        }
+        # Create grid of points (coarser resolution for API limits)
+        step = 0.0025  # ~250m resolution
+        lats = np.arange(south, north + step, step)
+        lons = np.arange(west, east + step, step)
         
-        # Make API request
-        response = requests.get(OPENTOPOGRAPHY_BASE_URL, params=params, timeout=30)
-        response.raise_for_status()
+        # Create elevation grid
+        elevation_grid = np.zeros((len(lats), len(lons)))
         
-        # Save temporary file
-        temp_path = self.cache_dir / "temp_dem.tif"
-        with open(temp_path, 'wb') as f:
-            f.write(response.content)
+        # Query points in batches to avoid API limits
+        batch_size = 100  # Reasonable batch size
+        points = []
         
-        # Read the downloaded DEM
-        with rasterio.open(temp_path) as src:
-            dem_array = src.read(1)
-            dem_transform = src.transform
+        for i, lat in enumerate(lats):
+            for j, lon in enumerate(lons):
+                points.append({
+                    "latitude": lat,
+                    "longitude": lon,
+                    "grid_i": i,
+                    "grid_j": j
+                })
+        
+        logger.info(f"Querying {len(points)} elevation points from OpenElevation API")
+        
+        # Process in batches
+        for batch_start in range(0, len(points), batch_size):
+            batch_end = min(batch_start + batch_size, len(points))
+            batch_points = points[batch_start:batch_end]
             
-            # Handle nodata values
-            if hasattr(src, 'nodata') and src.nodata is not None:
-                dem_array = np.where(dem_array == src.nodata, np.nan, dem_array)
+            # Prepare API request
+            locations = [{"latitude": p["latitude"], "longitude": p["longitude"]} 
+                        for p in batch_points]
+            
+            try:
+                response = requests.post(
+                    "https://api.open-elevation.com/api/v1/lookup",
+                    json={"locations": locations},
+                    timeout=60
+                )
+                
+                if response.status_code == 200:
+                    results = response.json()["results"]
+                    for point, result in zip(batch_points, results):
+                        elevation_grid[point["grid_i"], point["grid_j"]] = result["elevation"]
+                    logger.info(f"✅ Processed batch {batch_start//batch_size + 1}/{(len(points) + batch_size - 1)//batch_size}")
+                else:
+                    logger.warning(f"❌ OpenElevation API batch failed: {response.status_code}")
+                    # Fill with default elevation
+                    for point in batch_points:
+                        elevation_grid[point["grid_i"], point["grid_j"]] = 100.0
+            
+            except Exception as e:
+                logger.warning(f"❌ OpenElevation API error: {e}")
+                # Fill with default elevation
+                for point in batch_points:
+                    elevation_grid[point["grid_i"], point["grid_j"]] = 100.0
+            
+            # Rate limiting - be respectful to free API
+            time.sleep(2)
         
-        # Clean up temporary file
-        temp_path.unlink()
+        # Create transform
+        transform = rasterio.transform.from_bounds(west, south, east, north, len(lons), len(lats))
         
-        return dem_array, dem_transform
+        return elevation_grid, transform
     
     def _cache_dem(self, 
                   dem_array: np.ndarray,
@@ -449,8 +395,8 @@ class TerrainAnalyzer:
                         east: float, north: float) -> Tuple[np.ndarray, rasterio.transform.Affine, DEMSource]:
         """Create a flat DEM as fallback"""
         
-        # Create 1x1 degree grid with 30m resolution
-        resolution = 0.0002778  # ~30m in degrees
+        # Create grid with reasonable resolution
+        resolution = 0.0025  # ~250m in degrees
         width = int((east - west) / resolution)
         height = int((north - south) / resolution)
         
@@ -460,7 +406,7 @@ class TerrainAnalyzer:
         # Create transform
         dem_transform = from_bounds(west, south, east, north, width, height)
         
-        return dem_array, dem_transform, DEMSource.SRTMGL1
+        return dem_array, dem_transform, DEMSource.FLAT
     
     def _extract_elevation_profile(self,
                                  route_line: LineString,
@@ -1164,16 +1110,13 @@ if __name__ == "__main__":
     # Create terrain analyzer
     analyzer = TerrainAnalyzer(
         cache_dir="data/_cache/terrain",
-        api_key=OPENTOPOGRAPHY_API_KEY,
-        preferred_resolution=30.0
+        preferred_resolution=250.0
     )
     
-    # Example route: Brussels to Antwerp (challenging terrain example)
+    # Example route: Lebanon test case
     example_route = LineString([
-        (4.3517, 50.8466),  # Brussels
-        (4.4000, 50.9000),  # Intermediate point
-        (4.4200, 51.0000),  # Intermediate point  
-        (4.4024, 51.2194)   # Antwerp
+        (35.5017, 33.8938),  # Beirut
+        (35.8497, 34.4373),  # Tripoli
     ])
     
     logger.info("Starting terrain analysis example...")
@@ -1181,8 +1124,7 @@ if __name__ == "__main__":
     # Perform terrain analysis
     terrain_analysis = analyzer.analyze_route_terrain(
         route_line=example_route,
-        buffer_km=5.0,
-        dem_source=DEMSource.SRTMGL1
+        buffer_km=2.0
     )
     
     # Generate and print report
@@ -1192,35 +1134,10 @@ if __name__ == "__main__":
     # Create visualization
     analyzer.create_terrain_visualization(
         terrain_analysis, 
-        output_path="terrain_analysis_example.png"
+        output_path="terrain_analysis_lebanon.png"
     )
     
     # Export all results
     export_terrain_analysis(terrain_analysis, output_dir="output/terrain")
     
-    # Example integration with other modules
-    logger.info("Testing integration with other modules...")
-    
-    # Integration with cost analysis
-    cost_factors = integrate_with_cost_analysis(terrain_analysis)
-    print(f"\nCost Factors for Cost Analysis Module:")
-    print(f"  Base multiplier: {cost_factors['base_cost_multiplier']:.1f}x")
-    print(f"  Additional tunnel cost: €{cost_factors['infrastructure_adjustments']['additional_tunnel_cost_eur']:,.0f}")
-    print(f"  Additional bridge cost: €{cost_factors['infrastructure_adjustments']['additional_bridge_cost_eur']:,.0f}")
-    
-    # Integration with station placement (example station locations)
-    example_stations = [
-        Point(4.3517, 50.8466),  # Brussels
-        Point(4.3800, 50.9200),  # Intermediate
-        Point(4.4024, 51.2194)   # Antwerp
-    ]
-    
-    station_terrain_data = integrate_with_station_placement(terrain_analysis, example_stations)
-    print(f"\nStation Terrain Context:")
-    for i, station_data in enumerate(station_terrain_data, 1):
-        print(f"  Station {i}: Elevation {station_data['elevation']:.0f}m, "
-              f"Slope {station_data['local_slope']*100:.1f}%, "
-              f"Suitability {station_data['terrain_suitability']:.2f}")
-    
     logger.info("Terrain analysis completed successfully!")
-
