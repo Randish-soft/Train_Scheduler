@@ -21,6 +21,7 @@ from enum import Enum
 import yaml
 import numpy as np
 from pathlib import Path
+from terrain_analysis import TerrainComplexity
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
