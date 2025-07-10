@@ -133,6 +133,8 @@ class StationTerrainContext:
     construction_cost_factor: float
 
 class TerrainAnalyzer:
+    
+   
     """
     Main terrain analysis engine for BCPC railway projects
     """
@@ -159,6 +161,12 @@ class TerrainAnalyzer:
         self.segment_length_km = 5.0        # km length for terrain segments
         self.slope_smoothing_window = 5     # number of points for slope smoothing
         
+    def _download_from_nasa_earthdata(self, west: float, south: float, east: float, north: float) -> Tuple[np.ndarray, rasterio.transform.Affine]:
+        """Download SRTM data from NASA Earthdata (placeholder implementation)"""
+        # For now, raise an exception to fall back to next service
+        # You can implement the full NASA Earthdata logic here later
+        raise NotImplementedError("NASA Earthdata implementation not yet complete")
+    
     def analyze_route_terrain(self, 
                             route_line: LineString,
                             buffer_km: float = 2.0,
@@ -297,35 +305,47 @@ class TerrainAnalyzer:
                 actual_source = DEMSource.SRTMGL1  # Default assumption for cached data
                 return dem_array, dem_transform, actual_source
         
-        # Download from OpenTopography
-        logger.info(f"Downloading DEM data from OpenTopography")
-        
-        # Try multiple DEM sources in order of preference
-        dem_sources_to_try = [
-            dem_source if dem_source else DEMSource.SRTMGL1,
-            DEMSource.COP30,
-            DEMSource.ASTER,
-            DEMSource.SRTMGL3
+        # Try multiple elevation services in order of preference
+        elevation_services = [
+            ("OpenTopography", self._download_dem_from_opentopography, [
+                dem_source if dem_source else DEMSource.SRTMGL1,
+                DEMSource.COP30,
+                DEMSource.ASTER,
+                DEMSource.SRTMGL3
+            ]),
+            ("NASA Earthdata", self._download_from_nasa_earthdata, [None]),
+            ("OpenElevation", self._download_from_openelevation, [None])
         ]
-        
-        for source in dem_sources_to_try:
-            try:
-                dem_array, dem_transform = self._download_dem_from_opentopography(
-                    west, south, east, north, source
-                )
-                
-                # Cache the downloaded DEM
-                self._cache_dem(dem_array, dem_transform, cache_path, west, south, east, north)
-                
-                logger.info(f"Successfully downloaded DEM from {source.value}")
-                return dem_array, dem_transform, source
-                
-            except Exception as e:
-                logger.warning(f"Failed to download from {source.value}: {e}")
-                continue
-        
-        # If all downloads fail, create a flat DEM
-        logger.warning("All DEM downloads failed, creating flat terrain assumption")
+
+        for service_name, download_func, sources in elevation_services:
+            logger.info(f"Trying {service_name} for DEM data...")
+            
+            if service_name == "OpenTopography":
+                # Try multiple DEM sources for OpenTopography
+                for source in sources:
+                    try:
+                        logger.info(f"Downloading from {service_name} ({source.value if source else 'default'})")
+                        dem_array, dem_transform = download_func(west, south, east, north, source)
+                        self._cache_dem(dem_array, dem_transform, cache_path, west, south, east, north)
+                        logger.info(f"✅ Successfully downloaded DEM from {service_name} ({source.value})")
+                        return dem_array, dem_transform, source
+                    except Exception as e:
+                        logger.warning(f"❌ {service_name} ({source.value}) failed: {e}")
+                        continue
+            else:
+                # Try other services (NASA, OpenElevation)
+                try:
+                    logger.info(f"Downloading from {service_name}")
+                    dem_array, dem_transform = download_func(west, south, east, north)
+                    self._cache_dem(dem_array, dem_transform, cache_path, west, south, east, north)
+                    logger.info(f"✅ Successfully downloaded DEM from {service_name}")
+                    return dem_array, dem_transform, DEMSource.SRTMGL1
+                except Exception as e:
+                    logger.warning(f"❌ {service_name} failed: {e}")
+                    continue
+
+        # If all services fail, create a flat DEM
+        logger.warning("⚠️  All elevation services failed, using flat terrain assumption")
         return self._create_flat_dem(west, south, east, north)
     
     def _download_dem_from_opentopography(self,
@@ -1171,3 +1191,4 @@ if __name__ == "__main__":
               f"Suitability {station_data['terrain_suitability']:.2f}")
     
     logger.info("Terrain analysis completed successfully!")
+
