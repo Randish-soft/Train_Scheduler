@@ -40,13 +40,6 @@ class TrainType(Enum):
     ELECTRIC_LOCOMOTIVE = "electric_locomotive"
     HYBRID = "hybrid"
 
-class TerrainComplexity(Enum):
-    """Terrain complexity categories affecting construction costs"""
-    FLAT = "flat"
-    ROLLING = "rolling"
-    MOUNTAINOUS = "mountainous"
-    URBAN = "urban"
-
 @dataclass
 class CostCoefficients:
     """
