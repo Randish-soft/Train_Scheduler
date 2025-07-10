@@ -44,33 +44,9 @@ You can use your own CSV file with city data:
 poetry run python -m src --csv input/your_custom_cities.csv
 ```
 
-### CSV File Format
-
-The input CSV file should contain city information in the following format:
-
-```csv
-city_name,latitude,longitude,population
-Beirut,33.8938,35.5018,361366
-Tripoli,34.4346,35.8493,229398
-Sidon,33.5571,35.3814,163554
-```
-
 *Note: The exact format may vary based on the implementation. Please check the sample files in the `input/` directory.*
 
-## 📁 Project Structure
 
-```
-Train_Scheduler/
-├── src/                    # Source code directory
-│   ├── __init__.py
-│   ├── __main__.py        # Main entry point
-│   └── ...                # Additional modules
-├── input/                  # Input data directory
-│   └── lebanon_cities_2024.csv  # Sample city data
-├── pyproject.toml         # Poetry configuration
-├── poetry.lock            # Poetry lock file
-└── README.md              # This file
-```
 
 ## 🗺️ How It Works
 
@@ -94,7 +70,7 @@ Contributions are welcome! Please feel free to submit a Pull Request. For major 
 
 ## 📝 TODO
 
-- [ ] Add support for multiple transportation modes
+- [X] Add support for multiple transportation modes
 - [ ] Implement real-time schedule updates
 - [X] Add visualization of train routes
 - [ ] Support for international routes
