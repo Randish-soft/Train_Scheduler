@@ -15,5 +15,5 @@ poetry run python -m src --csv input/lebanon_cities_2024.csv --intercity
 ## New Pipeline (Data Structures Based + Raster):
 
 ```bash
-poetry run python pipeline/src/pipeline_initiator.py --csv input/lebanon_cities_2024.csv --output output --verbose
+python auto_run_pipeline.py
 ```

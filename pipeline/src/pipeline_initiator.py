@@ -70,8 +70,8 @@ class BCPCPipelineInitiator:
         
         # Initialize other pipeline components
         self.terrain_analyzer = TerrainAnalyzer(
-            cache_dir=str(self.output_dir / "cache" / "terrain"),
-            api_key="153e670200e6b3568ff813c994fda446"
+            cache_dir="data/_cache/terrain",
+            preferred_resolution=250.0  # Use 250m resolution for OpenElevation
         )
         
         self.station_optimizer = StationPlacementOptimizer()
