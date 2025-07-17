@@ -1,4 +1,4 @@
-# File: railway_ai/test.py
+# File: Model/test.py
 """
 Railway AI Testing Module
 Comprehensive testing and validation of railway intelligence systems.
@@ -12,11 +12,11 @@ from dataclasses import dataclass, field
 from datetime import datetime
 import numpy as np
 
-from railway_ai.config import RailwayConfig
-from railway_ai.learn import RailwayLearner
-from railway_ai.generate import RouteGenerator
-from railway_ai.grade import PlanGrader
-from railway_ai.utils.geo import haversine_distance
+from .config import RailwayConfig
+from .learn import RailwayLearner
+from .generate import RouteGenerator
+from .grade import PlanGrader
+from .utils.geo import haversine_distance
 
 @dataclass
 class TestCase:
@@ -938,7 +938,7 @@ class ScenarioTester:
         try:
             # Example: Test distance calculation
             if test_case.name == "distance_calculation":
-                from railway_ai.utils.geo import haversine_distance
+                from .utils.geo import haversine_distance
                 
                 input_data = test_case.input_data
                 point1 = input_data['point1']
@@ -1179,7 +1179,7 @@ class ScenarioTester:
 
 # Example usage and testing
 if __name__ == "__main__":
-    from railway_ai.config import create_development_config
+    from .config import create_development_config
     
     config = create_development_config()
     tester = ScenarioTester(config)

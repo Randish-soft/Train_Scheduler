@@ -1,0 +1,97 @@
+# Core dependencies from pyproject.toml
+pandas>=2.0.0
+numpy>=1.24.0
+geopandas>=0.14.0
+shapely>=2.0.0
+rasterio>=1.3.0
+requests>=2.31.0
+geopy>=2.3.0
+matplotlib>=3.7.0
+scipy>=1.11.0
+scikit-learn>=1.3.0
+pyproj>=3.6.0
+dagster>=1.5.0
+dagster-webserver>=1.5.0
+numpy
+
+# Missing dependencies based on code analysis
+PyYAML>=6.0.0
+pydantic>=2.0.0
+typer>=0.9.0
+rich>=13.0.0
+click>=8.1.0
+jinja2>=3.1.0
+folium>=0.14.0
+plotly>=5.15.0
+networkx>=3.1.0
+osmnx>=1.6.0
+contextily>=1.4.0
+seaborn>=0.12.0
+tqdm>=4.65.0
+joblib>=1.3.0
+psutil>=5.9.0
+
+# Machine Learning & AI
+torch>=2.0.0
+transformers>=4.30.0
+xgboost>=1.7.0
+lightgbm>=4.0.0
+
+# Geospatial & Routing
+overpy>=0.7.0
+osmium>=3.6.0
+rtree>=1.0.0
+fiona>=1.9.0
+gdal>=3.7.0
+
+# Database & Storage
+sqlalchemy>=2.0.0
+sqlite3-cli>=1.0.0
+h5py>=3.9.0
+
+# Web & API
+fastapi>=0.100.0
+uvicorn>=0.23.0
+httpx>=0.24.0
+
+# Development & Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+black>=23.7.0
+flake8>=6.0.0
+mypy>=1.5.0
+
+# Jupyter & Analysis
+jupyter>=1.0.0
+ipykernel>=6.25.0
+nbconvert>=7.7.0
+
+# Configuration & Environment
+python-dotenv>=1.0.0
+configparser>=5.3.0
+toml>=0.10.0
+
+# Parallel Processing
+dask>=2023.8.0
+distributed>=2023.8.0
+
+# Optimization
+pulp>=2.7.0
+cvxpy>=1.3.0
+ortools>=9.7.0
+
+# Time Series & Statistics
+statsmodels>=0.14.0
+prophet>=1.1.0
+
+# Visualization Enhancement
+bokeh>=3.2.0
+altair>=5.0.0
+streamlit>=1.25.0
+
+# Utilities
+pathlib2>=2.3.0
+dataclasses-json>=0.5.0
+more-itertools>=10.0.0
+python-dateutil>=2.8.0
+pytz>=2023.3

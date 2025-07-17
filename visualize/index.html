@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lebanon Railway Network - Detailed Engineering View</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/leaflet.css" />
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+        }
+        
+        .header {
+            background: rgba(0,0,0,0.4);
+            padding: 15px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 2em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
+        }
+        
+        .container {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 15px;
+            padding: 15px;
+            height: calc(100vh - 100px);
+        }
+        
+        .map-container {
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+            position: relative;
+        }
+        
+        #map {
+            height: 100%;
+            width: 100%;
+        }
+        
+        .controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            background: rgba(255,255,255,0.9);
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+        
+        .control-group {
+            margin-bottom: 8px;
+        }
+        
+        .control-group label {
+            display: block;
+            color: #333;
+            font-size: 0.9em;
+            margin-bottom: 3px;
+        }
+        
+        .info-panel {
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 15px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+            overflow-y: auto;
+        }
+        
+        .section-card {
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 12px;
+            border-left: 4px solid;
+        }
+        
+        .tunnel-section { border-left-color: #9C27B0; }
+        .bridge-section { border-left-color: #FF9800; }
+        .surface-section { border-left-color: #4CAF50; }
+        .elevated-section { border-left-color: #2196F3; }
+        .cutting-section { border-left-color: #795548; }
+        
+        .section-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .section-details {
+            font-size: 0.85em;
+            opacity: 0.9;
+            line-height: 1.4;
+        }
+        
+        .engineering-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        
+        .stat-item {
+            background: rgba(255,255,255,0.05);
+            padding: 8px;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 0.8em;
+        }
+        
+        .legend {
+            margin-top: 15px;
+            padding: 10px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 5px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 5px;
+            font-size: 0.85em;
+        }
+        
+        .legend-color {
+            width: 16px;
+            height: 3px;
+            border-radius: 1px;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                grid-template-columns: 1fr;
+                height: auto;
+            }
+            
+            .map-container {
+                height: 60vh;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🚄 Lebanon Railway Network - Engineering Analysis</h1>
+        <div style="font-size: 0.9em; margin-top: 5px;">Detailed Infrastructure Visualization • French Technology Standards</div>
+    </div>
+    
+    <div class="container">
+        <div class="map-container">
+            <div class="controls">
+                <div class="control-group">
+                    <label>
+                        <input type="checkbox" id="showTunnels" checked> Tunnels
+                    </label>
+                </div>
+                <div class="control-group">
+                    <label>
+                        <input type="checkbox" id="showBridges" checked> Bridges
+                    </label>
+                </div>
+                <div class="control-group">
+                    <label>
+                        <input type="checkbox" id="showElevated" checked> Elevated
+                    </label>
+                </div>
+                <div class="control-group">
+                    <label>
+                        <input type="checkbox" id="showGradient" checked> Gradient
+                    </label>
+                </div>
+                <div class="control-group">
+                    <label>
+                        <input type="checkbox" id="showStations" checked> Stations
+                    </label>
+                </div>
+            </div>
+            <div id="map"></div>
+        </div>
+        
+        <div class="info-panel">
+            <h3 style="margin-top: 0;">🏗️ Engineering Sections</h3>
+            
+            <div class="section-card tunnel-section">
+                <div class="section-title">
+                    🚇 Tunnel Sections
+                </div>
+                <div class="section-details">
+                    <strong>Beirut-Jounieh Mountain Tunnel:</strong> 12.3 km<br>
+                    • Double-bore TBM construction<br>
+                    • Max depth: 180m below ground<br>
+                    • Ventilation shafts every 800m<br>
+                    • Emergency exits every 500m
+                </div>
+                <div class="engineering-stats">
+                    <div class="stat-item">12.3 km<br>Total Length</div>
+                    <div class="stat-item">€850M<br>Construction Cost</div>
+                </div>
+            </div>
+            
+            <div class="section-card bridge-section">
+                <div class="section-title">
+                    🌉 Bridge Sections
+                </div>
+                <div class="section-details">
+                    <strong>Litani River Viaduct:</strong> 2.8 km<br>
+                    • Cable-stayed design, 65m height<br>
+                    • Seismic isolation bearings<br>
+                    <strong>Coastal Viaducts:</strong> 8.1 km total<br>
+                    • Prestressed concrete construction
+                </div>
+                <div class="engineering-stats">
+                    <div class="stat-item">10.9 km<br>Total Bridges</div>
+                    <div class="stat-item">€420M<br>Construction Cost</div>
+                </div>
+            </div>
+            
+            <div class="section-card elevated-section">
+                <div class="section-title">
+                    🏗️ Elevated Sections
+                </div>
+                <div class="section-details">
+                    <strong>Urban Elevated (Beirut):</strong> 8.7 km<br>
+                    • Sound barriers throughout<br>
+                    • Integrated with metro system<br>
+                    <strong>Coastal Elevated:</strong> 15.2 km<br>
+                    • Storm surge protection<br>
+                    • Corrosion-resistant materials
+                </div>
+                <div class="engineering-stats">
+                    <div class="stat-item">23.9 km<br>Total Elevated</div>
+                    <div class="stat-item">€680M<br>Construction Cost</div>
+                </div>
+            </div>
+            
+            <div class="section-card cutting-section">
+                <div class="section-title">
+                    ⛰️ Cutting Sections
+                </div>
+                <div class="section-details">
+                    <strong>Mountain Cuttings:</strong> 18.4 km<br>
+                    • Rock cuts up to 45m deep<br>
+                    • Slope stabilization systems<br>
+                    • Drainage and rockfall protection
+                </div>
+                <div class="engineering-stats">
+                    <div class="stat-item">18.4 km<br>Rock Cuttings</div>
+                    <div class="stat-item">€290M<br>Construction Cost</div>
+                </div>
+            </div>
+            
+            <div class="section-card surface-section">
+                <div class="section-title">
+                    🛤️ At-Grade Sections
+                </div>
+                <div class="section-details">
+                    <strong>Standard Ballasted Track:</strong> 195.1 km<br>
+                    • Slab track in urban areas<br>
+                    • Continuous welded rail<br>
+                    • ERTMS Level 2 signaling<br>
+                    • 25kV AC electrification
+                </div>
+                <div class="engineering-stats">
+                    <div class="stat-item">195.1 km<br>Surface Track</div>
+                    <div class="stat-item">€2.1B<br>Track Systems</div>
+                </div>
+            </div>
+            
+            <h3>📊 Technical Specifications</h3>
+            <div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 5px; font-size: 0.85em; line-height: 1.5;">
+                <strong>Track Standards:</strong><br>
+                • Gauge: 1435mm (Standard)<br>
+                • Max Speed: 200 km/h<br>
+                • Min Curve Radius: 2500m<br>
+                • Max Gradient: 2.5%<br>
+                • Axle Load: 22.5 tonnes<br><br>
+                
+                <strong>Electrification:</strong><br>
+                • System: 25kV AC 50Hz<br>
+                • Overhead Contact Line<br>
+                • Auto-tensioning system<br><br>
+                
+                <strong>Signaling:</strong><br>
+                • ERTMS Level 2<br>
+                • GSM-R communications<br>
+                • Centralized Traffic Control
+            </div>
+            
+            <div class="legend">
+                <h4 style="margin: 0 0 10px 0;">Map Legend</h4>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #9C27B0;"></div>
+                    Tunnel Sections
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #FF9800;"></div>
+                    Bridge/Viaduct
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #2196F3;"></div>
+                    Elevated Sections
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #795548;"></div>
+                    Rock Cutting
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #4CAF50;"></div>
+                    At-Grade Track
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: linear-gradient(90deg, #FF0000, #FFFF00, #00FF00);"></div>
+                    Gradient (Red=Steep, Green=Flat)
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/leaflet.js"></script>
+    <script>
+        // Initialize map
+        const map = L.map('map').setView([33.8547, 35.8623], 9);
+
+        // Add satellite/terrain base layer
+        L.tileLayer('https://mt1.google.com/vt/lyrs=p&x={x}&y={y}&z={z}', {
+            maxZoom: 18,
+            attribution: '© Google Maps'
+        }).addTo(map);
+
+        // Station data with more detailed positioning
+        const stations = [
+            {
+                name: "Tyre Central",
+                lat: 33.2704,
+                lon: 35.2038,
+                type: "intercity",
+                elevation: 28,
+                platforms: 4,
+                features: ["Port Connection", "Customs Terminal", "Park & Ride"]
+            },
+            {
+                name: "Sidon Central", 
+                lat: 33.5614,
+                lon: 35.3712,
+                type: "regional",
+                elevation: 46,
+                platforms: 3,
+                features: ["Historic Port", "City Center", "Bus Terminal"]
+            },
+            {
+                name: "Beirut Central",
+                lat: 33.8886,
+                lon: 35.4955,
+                type: "major",
+                elevation: 56,
+                platforms: 8,
+                features: ["Airport Link", "Metro Connection", "International Terminal"]
+            },
+            {
+                name: "Jounieh Central",
+                lat: 33.9811,
+                lon: 35.6178,
+                type: "regional", 
+                elevation: 89,
+                platforms: 4,
+                features: ["Casino District", "Cable Car", "Marina"]
+            },
+            {
+                name: "Tripoli Central",
+                lat: 34.4359,
+                lon: 35.8492,
+                type: "intercity",
+                elevation: 67,
+                platforms: 6,
+                features: ["Oil Refinery", "Industrial Port", "Syria Border Link"]
+            }
+        ];
+
+        // Detailed route sections with engineering data
+        const routeSections = [
+            // Tyre to Sidon - Coastal route
+            {
+                coordinates: [
+                    [33.2704, 35.2038], [33.28, 35.21], [33.31, 35.23], [33.34, 35.25],
+                    [33.38, 35.27], [33.42, 35.29], [33.46, 35.31], [33.50, 35.33],
+                    [33.5614, 35.3712]
+                ],
+                type: 'surface',
+                color: '#4CAF50',
+                description: 'Coastal surface route',
+                gradient: 'low',
+                maxSpeed: 160
+            },
+            // Sidon to Beirut - Mixed terrain
+            {
+                coordinates: [
+                    [33.5614, 35.3712], [33.61, 35.38], [33.66, 35.39], [33.71, 35.41],
+                    [33.76, 35.43], [33.81, 35.45], [33.8886, 35.4955]
+                ],
+                type: 'surface',
+                color: '#4CAF50',
+                description: 'Surface route with urban approach',
+                gradient: 'medium',
+                maxSpeed: 140
+            },
+            // Beirut urban elevated section
+            {
+                coordinates: [
+                    [33.8886, 35.4955], [33.895, 35.505], [33.905, 35.515], [33.915, 35.525]
+                ],
+                type: 'elevated',
+                color: '#2196F3',
+                description: 'Urban elevated structure',
+                gradient: 'low',
+                maxSpeed: 80
+            },
+            // Beirut to Jounieh - Major tunnel through mountains
+            {
+                coordinates: [
+                    [33.915, 35.525], [33.93, 35.54], [33.94, 35.56], [33.95, 35.58],
+                    [33.96, 35.595], [33.97, 35.605], [33.9811, 35.6178]
+                ],
+                type: 'tunnel',
+                color: '#9C27B0',
+                description: 'Mountain tunnel - 12.3km bore',
+                gradient: 'high',
+                maxSpeed: 200
+            },
+            // Jounieh to Tripoli - Complex mountain route
+            {
+                coordinates: [
+                    [33.9811, 35.6178], [34.01, 35.63], [34.05, 35.65], [34.10, 35.67],
+                    [34.15, 35.69], [34.20, 35.71], [34.25, 35.73], [34.30, 35.75],
+                    [34.35, 35.77], [34.40, 35.82], [34.4359, 35.8492]
+                ],
+                type: 'mixed',
+                sections: [
+                    { start: 0, end: 3, type: 'cutting', color: '#795548' },
+                    { start: 3, end: 6, type: 'bridge', color: '#FF9800' },
+                    { start: 6, end: 10, type: 'surface', color: '#4CAF50' }
+                ],
+                description: 'Mixed engineering: cuttings, bridges, surface',
+                gradient: 'high',
+                maxSpeed: 160
+            }
+        ];
+
+        // Layer groups for different elements
+        const layers = {
+            tunnels: L.layerGroup(),
+            bridges: L.layerGroup(),
+            elevated: L.layerGroup(),
+            surface: L.layerGroup(),
+            cuttings: L.layerGroup(),
+            stations: L.layerGroup(),
+            gradient: L.layerGroup()
+        };
+
+        // Add all layers to map initially
+        Object.values(layers).forEach(layer => layer.addTo(map));
+
+        // Function to create detailed route visualization
+        function createRouteVisualization() {
+            routeSections.forEach((section, index) => {
+                if (section.type === 'mixed') {
+                    // Handle mixed sections with different engineering types
+                    section.sections.forEach(subSection => {
+                        const startIdx = subSection.start;
+                        const endIdx = subSection.end;
+                        const subCoords = section.coordinates.slice(startIdx, endIdx + 1);
+                        
+                        const line = L.polyline(subCoords, {
+                            color: subSection.color,
+                            weight: 6,
+                            opacity: 0.8
+                        });
+                        
+                        // Add to appropriate layer
+                        if (subSection.type === 'tunnel') layers.tunnels.addLayer(line);
+                        else if (subSection.type === 'bridge') layers.bridges.addLayer(line);
+                        else if (subSection.type === 'elevated') layers.elevated.addLayer(line);
+                        else if (subSection.type === 'cutting') layers.cuttings.addLayer(line);
+                        else layers.surface.addLayer(line);
+                        
+                        line.bindPopup(`
+                            <div style="font-family: Arial, sans-serif;">
+                                <h4>${subSection.type.toUpperCase()} Section</h4>
+                                <p><strong>Length:</strong> ~${(subCoords.length * 5).toFixed(1)} km</p>
+                                <p><strong>Engineering:</strong> ${getEngineeringDetails(subSection.type)}</p>
+                            </div>
+                        `);
+                    });
+                } else {
+                    // Single engineering type section
+                    const line = L.polyline(section.coordinates, {
+                        color: section.color,
+                        weight: 6,
+                        opacity: 0.8,
+                        dashArray: section.type === 'tunnel' ? '10,5' : null
+                    });
+                    
+                    // Add to appropriate layer
+                    if (section.type === 'tunnel') layers.tunnels.addLayer(line);
+                    else if (section.type === 'bridge') layers.bridges.addLayer(line);
+                    else if (section.type === 'elevated') layers.elevated.addLayer(line);
+                    else layers.surface.addLayer(line);
+                    
+                    line.bindPopup(`
+                        <div style="font-family: Arial, sans-serif;">
+                            <h4>${section.type.toUpperCase()} Section</h4>
+                            <p><strong>Description:</strong> ${section.description}</p>
+                            <p><strong>Max Speed:</strong> ${section.maxSpeed} km/h</p>
+                            <p><strong>Gradient:</strong> ${section.gradient}</p>
+                            <p><strong>Length:</strong> ~${(section.coordinates.length * 5).toFixed(1)} km</p>
+                        </div>
+                    `);
+                }
+                
+                // Add gradient visualization
+                const gradientColors = getGradientColors(section.gradient);
+                const gradientLine = L.polyline(section.coordinates, {
+                    color: gradientColors,
+                    weight: 3,
+                    opacity: 0.6
+                });
+                layers.gradient.addLayer(gradientLine);
+            });
+        }
+
+        // Function to get engineering details
+        function getEngineeringDetails(type) {
+            const details = {
+                'tunnel': 'Double-bore TBM, emergency systems',
+                'bridge': 'Prestressed concrete or cable-stayed',
+                'elevated': 'Prestressed concrete columns',
+                'cutting': 'Rock cutting with slope protection',
+                'surface': 'Ballasted track on embankment'
+            };
+            return details[type] || 'Standard construction';
+        }
+
+        // Function to get gradient colors
+        function getGradientColors(gradient) {
+            const colors = {
+                'low': '#00FF00',    // Green
+                'medium': '#FFFF00', // Yellow  
+                'high': '#FF0000'    // Red
+            };
+            return colors[gradient] || '#4CAF50';
+        }
+
+        // Add stations with detailed information
+        stations.forEach(station => {
+            const iconSize = station.type === 'major' ? [35, 35] : station.type === 'intercity' ? [28, 28] : [22, 22];
+            const iconHtml = station.type === 'major' ? '🚄' : station.type === 'intercity' ? '🚅' : '🚉';
+            
+            const icon = L.divIcon({
+                className: 'custom-icon',
+                html: iconHtml,
+                iconSize: iconSize,
+                iconAnchor: [iconSize[0]/2, iconSize[1]/2]
+            });
+            
+            const marker = L.marker([station.lat, station.lon], {icon: icon});
+            
+            const popupContent = `
+                <div style="font-family: Arial, sans-serif; min-width: 250px;">
+                    <h3 style="margin: 0 0 10px 0; color: #2196F3;">${station.name}</h3>
+                    <p><strong>Type:</strong> ${station.type.charAt(0).toUpperCase() + station.type.slice(1)}</p>
+                    <p><strong>Elevation:</strong> ${station.elevation}m above sea level</p>
+                    <p><strong>Platforms:</strong> ${station.platforms}</p>
+                    <p><strong>Features:</strong></p>
+                    <ul style="margin: 5px 0; padding-left: 20px;">
+                        ${station.features.map(f => `<li>${f}</li>`).join('')}
+                    </ul>
+                    <div style="margin-top: 10px; padding: 8px; background: #f0f0f0; border-radius: 4px;">
+                        <small style="color: #333;">🇫🇷 French Railway Technology<br>
+                        SNCF Standards • ERTMS Signaling</small>
+                    </div>
+                </div>
+            `;
+            
+            marker.bindPopup(popupContent);
+            layers.stations.addLayer(marker);
+        });
+
+        // Create the visualization
+        createRouteVisualization();
+
+        // Control panel functionality
+        document.getElementById('showTunnels').addEventListener('change', function(e) {
+            if (e.target.checked) {
+                map.addLayer(layers.tunnels);
+            } else {
+                map.removeLayer(layers.tunnels);
+            }
+        });
+
+        document.getElementById('showBridges').addEventListener('change', function(e) {
+            if (e.target.checked) {
+                map.addLayer(layers.bridges);
+            } else {
+                map.removeLayer(layers.bridges);
+            }
+        });
+
+        document.getElementById('showElevated').addEventListener('change', function(e) {
+            if (e.target.checked) {
+                map.addLayer(layers.elevated);
+            } else {
+                map.removeLayer(layers.elevated);
+            }
+        });
+
+        document.getElementById('showGradient').addEventListener('change', function(e) {
+            if (e.target.checked) {
+                map.addLayer(layers.gradient);
+            } else {
+                map.removeLayer(layers.gradient);
+            }
+        });
+
+        document.getElementById('showStations').addEventListener('change', function(e) {
+            if (e.target.checked) {
+                map.addLayer(layers.stations);
+            } else {
+                map.removeLayer(layers.stations);
+            }
+        });
+
+        // Fit map to show all elements
+        const allCoordinates = [];
+        routeSections.forEach(section => {
+            allCoordinates.push(...section.coordinates);
+        });
+        stations.forEach(station => {
+            allCoordinates.push([station.lat, station.lon]);
+        });
+        
+        const bounds = L.latLngBounds(allCoordinates);
+        map.fitBounds(bounds.pad(0.1));
+    </script>
+</body>
+</html>

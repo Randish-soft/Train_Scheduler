@@ -1,4 +1,4 @@
-# File: railway_ai/grade.py
+# File: Model/grade.py
 """
 Plan Grading and Evaluation Module
 Comprehensive evaluation and scoring of generated railway route plans.
@@ -12,9 +12,9 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 
-from railway_ai.config import RailwayConfig
-from railway_ai.utils.geo import haversine_distance, GeoUtils
-from railway_ai.utils.ml import MLPipeline
+from .config import RailwayConfig
+from .utils.geo import haversine_distance, GeoUtils
+from .utils.ml import MLPipeline
 
 class GradeCategory(Enum):
     COST_EFFICIENCY = "cost_efficiency"
@@ -1173,7 +1173,7 @@ class PlanGrader:
 
 # Example usage and testing
 if __name__ == "__main__":
-    from railway_ai.config import create_development_config
+    from .config import create_development_config
     
     config = create_development_config()
     grader = PlanGrader(config)
