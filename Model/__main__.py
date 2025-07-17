@@ -1,4 +1,4 @@
-# File: railway_ai/__main__.py
+# File: Model/__main__.py
 """
 Railway AI - Intelligent Railway Route Planning and Optimization
 Main entry point for the railway intelligence system.
@@ -11,12 +11,11 @@ from typing import Optional, List
 import logging
 
 # Import all railway AI modules
-from railway_ai.config import RailwayConfig, LogLevel
-from railway_ai.learn import RailwayLearner
-from railway_ai.generate import RouteGenerator
-from railway_ai.retrain import ModelRetrainer
-from railway_ai.test import ScenarioTester
-from railway_ai.grade import PlanGrader
+from .config import RailwayConfig, LogLevel
+from .learn import RailwayLearner
+from .generate import RouteGenerator
+from .test import ScenarioTester
+from .grade import PlanGrader
 
 def setup_logging(log_level: LogLevel = LogLevel.INFO, log_file: Optional[str] = None):
     """Setup logging configuration"""
@@ -59,23 +58,23 @@ def create_argument_parser() -> argparse.ArgumentParser:
         epilog="""
 Examples:
   # Learn from German railway network
-  python -m railway_ai --mode learn --country germany --train-types "ICE,IC,S"
+  python -m Model --mode learn --country germany --train-types "ICE,IC,S"
   
   # Generate route plan for Belgian cities
-  python -m railway_ai --mode generate --input cities.csv --country belgium
+  python -m Model --mode generate --input cities.csv --country belgium
   
   # Test mountain crossing scenario
-  python -m railway_ai --mode test --scenario alpine_crossing
+  python -m Model --mode test --scenario alpine_crossing
   
   # Grade generated plan
-  python -m railway_ai --mode grade --plan outputs/plan.json --metrics cost,feasibility
+  python -m Model --mode grade --plan outputs/plan.json --metrics cost,feasibility
         """
     )
     
     # Core operation mode
     parser.add_argument(
         "--mode", 
-        choices=["learn", "generate", "retrain", "test", "grade"],
+        choices=["learn", "generate", "test", "grade"],
         required=True,
         help="Operation mode"
     )
@@ -104,12 +103,6 @@ Examples:
     gen_group.add_argument("--constraints", help="Constraint file path")
     gen_group.add_argument("--route-name", help="Name for generated route")
     
-    # Retraining mode arguments
-    retrain_group = parser.add_argument_group("Retraining Mode")
-    retrain_group.add_argument("--feedback", help="Feedback data file")
-    retrain_group.add_argument("--performance-data", help="Performance metrics file")
-    retrain_group.add_argument("--incremental", action="store_true", 
-                              help="Incremental learning")
     
     # Testing mode arguments
     test_group = parser.add_argument_group("Testing Mode")
@@ -140,9 +133,6 @@ def validate_arguments(args: argparse.Namespace) -> bool:
         if not args.input:
             errors.append("--input is required for generate mode")
     
-    elif args.mode == "retrain":
-        if not args.feedback and not args.performance_data:
-            errors.append("Either --feedback or --performance-data is required for retrain mode")
     
     elif args.mode == "test":
         if not args.scenario and not args.test_suite and not args.benchmark:
@@ -265,35 +255,6 @@ def execute_generate_mode(args: argparse.Namespace, config: RailwayConfig) -> in
             traceback.print_exc()
         return 1
 
-def execute_retrain_mode(args: argparse.Namespace, config: RailwayConfig) -> int:
-    """Execute model retraining mode"""
-    logger = logging.getLogger(__name__)
-    logger.info("🔄 Retraining models with new data...")
-    
-    try:
-        # Initialize retrainer
-        retrainer = ModelRetrainer(config=config)
-        
-        # Execute retraining
-        results = retrainer.update_models(
-            feedback_file=args.feedback,
-            performance_file=args.performance_data,
-            incremental=args.incremental
-        )
-        
-        # Print results
-        logger.info("✅ Retraining completed!")
-        logger.info(f"📈 Models improved: {len(results.get('improved_models', []))}")
-        logger.info(f"⚡ Performance gain: {results.get('avg_improvement', 0):.2%}")
-        
-        return 0
-        
-    except Exception as e:
-        logger.error(f"❌ Retraining failed: {e}")
-        if args.verbose:
-            import traceback
-            traceback.print_exc()
-        return 1
 
 def execute_test_mode(args: argparse.Namespace, config: RailwayConfig) -> int:
     """Execute testing mode"""
@@ -418,8 +379,7 @@ def main() -> int:
             result = execute_learn_mode(args, config)
         elif args.mode == "generate":
             result = execute_generate_mode(args, config)
-        elif args.mode == "retrain":
-            result = execute_retrain_mode(args, config)
+        
         elif args.mode == "test":
             result = execute_test_mode(args, config)
         elif args.mode == "grade":

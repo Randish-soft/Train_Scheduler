@@ -1,4 +1,4 @@
-# File: railway_ai/config.py
+# File: Model/config.py
 """
 Railway AI Configuration Management
 Centralized configuration for all railway intelligence components.
@@ -55,7 +55,7 @@ class DatabaseConfig:
     """Database connection configuration"""
     host: str = "localhost"
     port: int = 5432
-    database: str = "railway_ai"
+    database: str = "Model"
     username: str = "railway_user"
     password: str = ""
     connection_timeout: int = 30

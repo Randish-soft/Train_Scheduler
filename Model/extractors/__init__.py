@@ -1,4 +1,4 @@
-# File: railway_ai/extractors/__init__.py
+# File: Model/extractors/__init__.py
 from .osm_railway import OSMRailwayExtractor
 from .terrain_analysis import TerrainAnalyzer  
 from .network_parser import RailwayNetworkParser

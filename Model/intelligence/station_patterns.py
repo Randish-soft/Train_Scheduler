@@ -1,4 +1,4 @@
-# File: railway_ai/intelligence/station_patterns.py
+# File: model/intelligence/station_patterns.py
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingRegressor
 from sklearn.cluster import KMeans, DBSCAN

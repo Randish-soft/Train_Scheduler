@@ -1,4 +1,4 @@
-# File: railway_ai/learn.py
+# File: Model/learn.py
 """
 Railway Learning Module
 Learns patterns and intelligence from existing railway networks.
@@ -12,16 +12,16 @@ from dataclasses import dataclass, field
 from datetime import datetime
 import numpy as np
 
-from railway_ai.config import RailwayConfig
-from railway_ai.extractors.osm_railway import OSMRailwayExtractor
-from railway_ai.extractors.terrain_analysis import TerrainAnalyzer
-from railway_ai.extractors.network_parser import RailwayNetworkParser
-from railway_ai.intelligence.station_patterns import StationPatternAnalyzer
-from railway_ai.intelligence.track_intelligence import TrackIntelligence
-from railway_ai.intelligence.train_classifier import TrainClassifier
-from railway_ai.intelligence.railyard_optimizer import RailwayardOptimizer
-from railway_ai.utils.geo import get_country_bounds, haversine_distance
-from railway_ai.utils.ml import MLPipeline, RailwayMLUtils
+from .config import RailwayConfig
+from .extractors.osm_railway import OSMRailwayExtractor
+from .extractors.terrain_analysis import TerrainAnalyzer
+from .extractors.network_parser import RailwayNetworkParser
+from .intelligence.station_patterns import StationPatternAnalyzer
+from .intelligence.track_intelligence import TrackIntelligence
+from .intelligence.train_classifier import TrainClassifier
+from .intelligence.railyard_optimizer import RailyardOptimizer
+from .utils.geo import get_country_bounds, haversine_distance
+from .utils.ml import MLPipeline, RailwayMLUtils
 
 @dataclass
 class LearningResults:
@@ -75,7 +75,7 @@ class RailwayLearner:
         self.station_analyzer = StationPatternAnalyzer()
         self.track_intelligence = TrackIntelligence()
         self.train_classifier = TrainClassifier()
-        self.railyard_optimizer = RailwayardOptimizer()
+        self.railyard_optimizer = RailyardOptimizer()
         
         # Initialize ML pipeline
         self.ml_pipeline = MLPipeline(random_state=self.config.ml.random_state)
@@ -1148,7 +1148,7 @@ class RailwayLearner:
 
 # Example usage and testing
 if __name__ == "__main__":
-    from railway_ai.config import create_development_config
+    from Model.config import create_development_config
     
     config = create_development_config()
     
