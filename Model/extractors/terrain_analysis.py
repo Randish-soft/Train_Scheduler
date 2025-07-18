@@ -1,4 +1,4 @@
-# File: railway_ai/extractors/terrain_analysis.py
+# File: model/extractors/terrain_analysis.py
 import numpy as np
 import requests
 from typing import Tuple, List, Dict, Optional

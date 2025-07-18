@@ -1,4 +1,4 @@
-# File: railway_ai/intelligence/track_intelligence.py
+# File: model/intelligence/track_intelligence.py
 import numpy as np
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingClassifier
 from sklearn.cluster import DBSCAN

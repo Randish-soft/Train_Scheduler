@@ -1,4 +1,4 @@
-# File: railway_ai/intelligence/train_classifier.py
+# File: model/intelligence/train_classifier.py
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingRegressor
 from sklearn.model_selection import train_test_split

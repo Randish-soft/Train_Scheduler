@@ -1,4 +1,4 @@
-# File: railway_ai/extractors/osm_railway.py
+# File: Model/extractors/osm_railway.py
 import requests
 import json
 from typing import Dict, List, Tuple
@@ -86,7 +86,7 @@ class OSMRailwayExtractor:
         return tracks
 
 
-# File: railway_ai/extractors/terrain_analysis.py
+# File: Model/extractors/terrain_analysis.py
 import numpy as np
 import requests
 from typing import Tuple, List
@@ -152,7 +152,7 @@ class TerrainAnalyzer:
         return cost_matrix
 
 
-# File: railway_ai/extractors/network_parser.py
+# File: Model/extractors/network_parser.py
 import networkx as nx
 from typing import Dict, List, Tuple
 import math

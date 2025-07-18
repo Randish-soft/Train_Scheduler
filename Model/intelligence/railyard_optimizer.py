@@ -1,4 +1,4 @@
-# File: railway_ai/intelligence/railyard_optimizer.py
+# File: model/intelligence/railyard_optimizer.py
 import numpy as np
 from sklearn.cluster import KMeans, DBSCAN
 from sklearn.ensemble import RandomForestRegressor
