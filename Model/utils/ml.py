@@ -1,4 +1,4 @@
-# File: railway_ai/utils/ml.py
+# File: model/utils/ml.py
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor, GradientBoostingRegressor
@@ -864,7 +864,7 @@ class RailwayFeatureEngineering:
     @staticmethod
     def create_network_features(station: Dict, all_stations: List[Dict]) -> np.ndarray:
         """Create network topology features for a station"""
-        from railway_ai.utils.geo import haversine_distance
+        from model.utils.geo import haversine_distance
         
         # Calculate distances to all other stations
         distances = []
