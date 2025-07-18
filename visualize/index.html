@@ -3,1922 +3,453 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lebanon National Railway System - Megaproject Engineering Dashboard</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/leaflet.css" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <title>Lebanon Railway Network Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #0a0a0a;
-            color: #e0e0e0;
-            overflow: hidden;
+            margin: 0;
+            font-family: Arial, sans-serif;
         }
-        
-        .main-dashboard {
-            display: grid;
-            grid-template-rows: auto 1fr;
-            height: 100vh;
-        }
-        
-        .header {
-            background: linear-gradient(135deg, rgba(0,12,40,0.95) 0%, rgba(0,20,60,0.95) 100%);
-            backdrop-filter: blur(20px);
-            border-bottom: 2px solid rgba(0,255,255,0.3);
-            padding: 15px 20px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-        }
-        
-        .header-content {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            max-width: 1800px;
-            margin: 0 auto;
-        }
-        
-        .logo-section {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-        
-        .logo-section h1 {
-            font-size: 24px;
-            background: linear-gradient(90deg, #00ffff, #0080ff);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            font-weight: 700;
-        }
-        
-        .status-indicators {
-            display: flex;
-            gap: 20px;
-        }
-        
-        .status-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 15px;
-            background: rgba(255,255,255,0.05);
-            border-radius: 20px;
-            border: 1px solid rgba(255,255,255,0.1);
-        }
-        
-        .status-item i {
-            color: #00ffff;
-        }
-        
-        .dashboard-container {
-            display: grid;
-            grid-template-columns: 350px 1fr 320px;
-            gap: 15px;
-            padding: 15px;
-            height: calc(100vh - 80px);
-        }
-        
-        .left-panel {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            overflow-y: auto;
-            padding-right: 10px;
-        }
-        
-        .map-section {
-            position: relative;
-            background: #000;
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.8);
-            border: 1px solid rgba(0,255,255,0.2);
-        }
-        
         #map {
-            height: 100%;
+            height: 100vh;
             width: 100%;
-            z-index: 1;
         }
-        
-        .map-overlay-controls {
+        .info-box {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+            max-width: 300px;
+        }
+        .info-box h2 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin: 5px 0;
+        }
+        .legend-line {
+            width: 30px;
+            height: 4px;
+            margin-right: 10px;
+            border-radius: 2px;
+        }
+        .station-icon {
+            font-size: 20px;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+        .controls {
             position: absolute;
             top: 20px;
             left: 20px;
-            z-index: 1000;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        
-        .control-card {
-            background: rgba(0,20,40,0.95);
-            backdrop-filter: blur(15px);
-            border: 1px solid rgba(0,255,255,0.3);
-            border-radius: 8px;
+            background: white;
             padding: 15px;
-            min-width: 250px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-        }
-        
-        .control-title {
-            font-size: 14px;
-            font-weight: 600;
-            margin-bottom: 10px;
-            color: #00ffff;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .control-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
-        }
-        
-        .toggle-btn {
-            padding: 6px 12px;
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.2);
-            border-radius: 4px;
-            cursor: pointer;
-            transition: all 0.3s;
-            font-size: 12px;
-            color: #ccc;
-            text-align: center;
-        }
-        
-        .toggle-btn:hover {
-            background: rgba(0,255,255,0.1);
-            border-color: rgba(0,255,255,0.5);
-            color: #fff;
-        }
-        
-        .toggle-btn.active {
-            background: rgba(0,255,255,0.2);
-            border-color: #00ffff;
-            color: #00ffff;
-            box-shadow: 0 0 10px rgba(0,255,255,0.3);
-        }
-        
-        .right-panel {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            overflow-y: auto;
-            padding-left: 10px;
-        }
-        
-        .panel-card {
-            background: linear-gradient(135deg, rgba(0,20,40,0.9) 0%, rgba(0,30,50,0.9) 100%);
-            border: 1px solid rgba(0,255,255,0.2);
-            border-radius: 10px;
-            padding: 20px;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 5px 20px rgba(0,0,0,0.4);
-        }
-        
-        .panel-title {
-            font-size: 16px;
-            font-weight: 600;
-            margin-bottom: 15px;
-            color: #00ffff;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .cost-summary {
-            background: rgba(0,0,0,0.3);
             border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 15px;
-        }
-        
-        .cost-total {
-            font-size: 32px;
-            font-weight: 700;
-            color: #00ff88;
-            margin-bottom: 10px;
-        }
-        
-        .cost-breakdown {
-            display: grid;
-            gap: 10px;
-        }
-        
-        .cost-item {
-            display: flex;
-            justify-content: space-between;
-            padding: 8px 0;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-        }
-        
-        .cost-item:last-child {
-            border-bottom: none;
-        }
-        
-        .cost-label {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 14px;
-            color: #bbb;
-        }
-        
-        .cost-value {
-            font-weight: 600;
-            color: #fff;
-        }
-        
-        .infrastructure-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-        }
-        
-        .infra-stat {
-            background: rgba(0,0,0,0.3);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 6px;
-            padding: 12px;
-            text-align: center;
-        }
-        
-        .infra-value {
-            font-size: 24px;
-            font-weight: 700;
-            color: #00ffff;
-        }
-        
-        .infra-label {
-            font-size: 12px;
-            color: #888;
-            margin-top: 4px;
-        }
-        
-        .progress-section {
-            margin-top: 15px;
-        }
-        
-        .progress-bar {
-            height: 20px;
-            background: rgba(0,0,0,0.5);
-            border-radius: 10px;
-            overflow: hidden;
-            margin-bottom: 10px;
-        }
-        
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #00ff88, #00ffff);
-            width: 35%;
-            position: relative;
-            animation: shimmer 2s infinite;
-        }
-        
-        @keyframes shimmer {
-            0% { opacity: 0.8; }
-            50% { opacity: 1; }
-            100% { opacity: 0.8; }
-        }
-        
-        .line-sections {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        
-        .line-item {
-            background: rgba(0,0,0,0.3);
-            border-left: 3px solid;
-            padding: 12px;
-            border-radius: 0 6px 6px 0;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        
-        .line-item:hover {
-            background: rgba(0,255,255,0.1);
-            transform: translateX(5px);
-        }
-        
-        .line-main { border-left-color: #ff4444; }
-        .line-coastal { border-left-color: #4444ff; }
-        .line-mountain { border-left-color: #44ff44; }
-        .line-bekaa { border-left-color: #ff44ff; }
-        .line-north { border-left-color: #ffaa44; }
-        
-        .line-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 5px;
-        }
-        
-        .line-name {
-            font-weight: 600;
-            font-size: 14px;
-        }
-        
-        .line-length {
-            font-size: 12px;
-            color: #888;
-        }
-        
-        .line-stats {
-            display: flex;
-            gap: 15px;
-            font-size: 12px;
-            color: #aaa;
-        }
-        
-        .engineering-details {
-            display: grid;
-            gap: 10px;
-        }
-        
-        .eng-category {
-            background: rgba(0,0,0,0.3);
-            border-radius: 8px;
-            padding: 12px;
-        }
-        
-        .eng-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 8px;
-        }
-        
-        .eng-title {
-            font-weight: 600;
-            font-size: 14px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .eng-count {
-            background: rgba(0,255,255,0.2);
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 12px;
-            color: #00ffff;
-        }
-        
-        .eng-items {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-            margin-top: 8px;
-            font-size: 12px;
-            color: #aaa;
-        }
-        
-        .station-list {
-            max-height: 300px;
-            overflow-y: auto;
-        }
-        
-        .station-item {
-            background: rgba(0,0,0,0.3);
-            border-radius: 6px;
-            padding: 10px;
-            margin-bottom: 8px;
-            border: 1px solid rgba(255,255,255,0.1);
-            transition: all 0.3s;
-        }
-        
-        .station-item:hover {
-            border-color: rgba(0,255,255,0.5);
-            background: rgba(0,255,255,0.05);
-        }
-        
-        .station-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 5px;
-        }
-        
-        .station-name {
-            font-weight: 600;
-            font-size: 13px;
-        }
-        
-        .station-type {
-            font-size: 11px;
-            padding: 2px 6px;
-            border-radius: 4px;
-            background: rgba(255,255,255,0.1);
-        }
-        
-        .station-details {
-            display: flex;
-            gap: 10px;
-            font-size: 11px;
-            color: #888;
-        }
-        
-        .realtime-stats {
-            position: absolute;
-            bottom: 20px;
-            left: 20px;
-            background: rgba(0,20,40,0.95);
-            backdrop-filter: blur(15px);
-            border: 1px solid rgba(0,255,255,0.3);
-            border-radius: 8px;
-            padding: 15px;
-            display: flex;
-            gap: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
             z-index: 1000;
         }
-        
-        .stat-display {
-            text-align: center;
-        }
-        
-        .stat-value {
-            font-size: 20px;
-            font-weight: 700;
-            color: #00ff88;
-        }
-        
-        .stat-label {
-            font-size: 11px;
-            color: #888;
-            margin-top: 4px;
-        }
-        
-        .timeline-view {
-            position: absolute;
-            bottom: 20px;
-            right: 20px;
-            background: rgba(0,20,40,0.95);
-            backdrop-filter: blur(15px);
-            border: 1px solid rgba(0,255,255,0.3);
-            border-radius: 8px;
-            padding: 15px;
-            z-index: 1000;
-            min-width: 300px;
-        }
-        
-        .timeline-header {
-            font-size: 14px;
-            font-weight: 600;
-            margin-bottom: 10px;
-            color: #00ffff;
-        }
-        
-        .timeline-phases {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        
-        .phase-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 12px;
-        }
-        
-        .phase-year {
-            background: rgba(0,255,255,0.2);
-            padding: 2px 8px;
-            border-radius: 4px;
-            color: #00ffff;
-            min-width: 80px;
-            text-align: center;
-        }
-        
-        .phase-desc {
-            color: #aaa;
-        }
-        
-        /* Custom scrollbar */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-        
-        ::-webkit-scrollbar-track {
-            background: rgba(0,0,0,0.3);
-            border-radius: 4px;
-        }
-        
-        ::-webkit-scrollbar-thumb {
-            background: rgba(0,255,255,0.3);
-            border-radius: 4px;
-        }
-        
-        ::-webkit-scrollbar-thumb:hover {
-            background: rgba(0,255,255,0.5);
-        }
-        
-        /* Leaflet custom styles */
-        .leaflet-popup-content-wrapper {
-            background: rgba(0,20,40,0.95);
-            border: 1px solid rgba(0,255,255,0.5);
-            border-radius: 8px;
-            backdrop-filter: blur(10px);
-        }
-        
-        .leaflet-popup-content {
-            color: #e0e0e0;
-            font-size: 13px;
-            line-height: 1.6;
-        }
-        
-        .leaflet-popup-tip {
-            background: rgba(0,20,40,0.95);
-            border-bottom: 1px solid rgba(0,255,255,0.5);
-            border-right: 1px solid rgba(0,255,255,0.5);
-        }
-        
-        .custom-icon {
-            background: none;
+        .control-btn {
+            display: block;
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            background: #4CAF50;
+            color: white;
             border: none;
-            text-align: center;
-            font-size: 24px;
-            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.8));
+            border-radius: 4px;
+            cursor: pointer;
         }
-        
-        @media (max-width: 1400px) {
-            .dashboard-container {
-                grid-template-columns: 300px 1fr 280px;
-            }
+        .control-btn:hover {
+            background: #45a049;
+        }
+        .control-btn.inactive {
+            background: #ccc;
+        }
+        .leaflet-popup-content {
+            min-width: 200px;
+        }
+        .popup-title {
+            font-weight: bold;
+            font-size: 16px;
+            margin-bottom: 8px;
+            color: #2c3e50;
+        }
+        .popup-info {
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        .popup-stat {
+            display: flex;
+            justify-content: space-between;
+            margin: 4px 0;
         }
     </style>
 </head>
 <body>
-    <div class="main-dashboard">
-        <header class="header">
-            <div class="header-content">
-                <div class="logo-section">
-                    <i class="fas fa-train" style="font-size: 28px; color: #00ffff;"></i>
-                    <h1>Lebanon National Railway System</h1>
-                    <span style="color: #888; font-size: 14px;">Engineering Megaproject Dashboard</span>
-                </div>
-                <div class="status-indicators">
-                    <div class="status-item">
-                        <i class="fas fa-calendar"></i>
-                        <span>Phase 1: 2025-2030</span>
-                    </div>
-                    <div class="status-item">
-                        <i class="fas fa-hard-hat"></i>
-                        <span>Construction: 35%</span>
-                    </div>
-                    <div class="status-item">
-                        <i class="fas fa-users"></i>
-                        <span>45,000 Workers</span>
-                    </div>
-                    <div class="status-item">
-                        <i class="fas fa-globe"></i>
-                        <span>SNCF-CMA CGM Consortium</span>
-                    </div>
-                </div>
+    <div id="map"></div>
+    
+    <div class="controls">
+        <h3 style="margin: 0 0 10px 0;">Toggle Layers</h3>
+        <button class="control-btn" id="toggle-lines">Railway Lines</button>
+        <button class="control-btn" id="toggle-stations">Stations</button>
+        <button class="control-btn" id="toggle-tunnels">Tunnels</button>
+        <button class="control-btn" id="toggle-bridges">Bridges</button>
+    </div>
+    
+    <div class="info-box">
+        <h2>Lebanon Railway Network</h2>
+        <p><strong>Total Network:</strong> 700 km</p>
+        <p><strong>Total Cost:</strong> €18.7 Billion</p>
+        <div style="margin-top: 15px;">
+            <h4 style="margin-bottom: 10px;">Railway Lines</h4>
+            <div class="legend-item">
+                <div class="legend-line" style="background: #ff0000;"></div>
+                <span>High-Speed Line</span>
             </div>
-        </header>
-        
-        <div class="dashboard-container">
-            <div class="left-panel">
-                <div class="panel-card">
-                    <div class="panel-title">
-                        <i class="fas fa-dollar-sign"></i>
-                        Project Economics
-                    </div>
-                    <div class="cost-summary">
-                        <div class="cost-total">€18.7 Billion</div>
-                        <div style="font-size: 14px; color: #888; margin-bottom: 15px;">Total Project Investment</div>
-                        <div class="cost-breakdown">
-                            <div class="cost-item">
-                                <span class="cost-label">
-                                    <i class="fas fa-road"></i> Civil Works
-                                </span>
-                                <span class="cost-value">€7.2B</span>
-                            </div>
-                            <div class="cost-item">
-                                <span class="cost-label">
-                                    <i class="fas fa-bolt"></i> Electrification
-                                </span>
-                                <span class="cost-value">€2.1B</span>
-                            </div>
-                            <div class="cost-item">
-                                <span class="cost-label">
-                                    <i class="fas fa-signal"></i> Signaling (ERTMS)
-                                </span>
-                                <span class="cost-value">€1.8B</span>
-                            </div>
-                            <div class="cost-item">
-                                <span class="cost-label">
-                                    <i class="fas fa-train"></i> Rolling Stock
-                                </span>
-                                <span class="cost-value">€3.5B</span>
-                            </div>
-                            <div class="cost-item">
-                                <span class="cost-label">
-                                    <i class="fas fa-building"></i> Stations & Terminals
-                                </span>
-                                <span class="cost-value">€2.4B</span>
-                            </div>
-                            <div class="cost-item">
-                                <span class="cost-label">
-                                    <i class="fas fa-warehouse"></i> Depots & Yards
-                                </span>
-                                <span class="cost-value">€1.7B</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="progress-section">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                            <span style="font-size: 12px; color: #888;">Overall Progress</span>
-                            <span style="font-size: 12px; color: #00ff88;">35%</span>
-                        </div>
-                        <div class="progress-bar">
-                            <div class="progress-fill"></div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="panel-card">
-                    <div class="panel-title">
-                        <i class="fas fa-route"></i>
-                        Railway Lines
-                    </div>
-                    <div class="line-sections">
-                        <div class="line-item line-main">
-                            <div class="line-header">
-                                <span class="line-name">Beirut-Tripoli Main Line</span>
-                                <span class="line-length">145 km</span>
-                            </div>
-                            <div class="line-stats">
-                                <span><i class="fas fa-tachometer-alt"></i> 200 km/h</span>
-                                <span><i class="fas fa-layer-group"></i> Double Track</span>
-                                <span><i class="fas fa-bolt"></i> 25kV AC</span>
-                            </div>
-                        </div>
-                        <div class="line-item line-coastal">
-                            <div class="line-header">
-                                <span class="line-name">Mediterranean Coastal</span>
-                                <span class="line-length">225 km</span>
-                            </div>
-                            <div class="line-stats">
-                                <span><i class="fas fa-tachometer-alt"></i> 160 km/h</span>
-                                <span><i class="fas fa-layer-group"></i> Double Track</span>
-                                <span><i class="fas fa-bolt"></i> 25kV AC</span>
-                            </div>
-                        </div>
-                        <div class="line-item line-mountain">
-                            <div class="line-header">
-                                <span class="line-name">Mount Lebanon Express</span>
-                                <span class="line-length">87 km</span>
-                            </div>
-                            <div class="line-stats">
-                                <span><i class="fas fa-tachometer-alt"></i> 120 km/h</span>
-                                <span><i class="fas fa-layer-group"></i> Single Track</span>
-                                <span><i class="fas fa-bolt"></i> 25kV AC</span>
-                            </div>
-                        </div>
-                        <div class="line-item line-bekaa">
-                            <div class="line-header">
-                                <span class="line-name">Bekaa Valley Line</span>
-                                <span class="line-length">165 km</span>
-                            </div>
-                            <div class="line-stats">
-                                <span><i class="fas fa-tachometer-alt"></i> 140 km/h</span>
-                                <span><i class="fas fa-layer-group"></i> Single Track</span>
-                                <span><i class="fas fa-bolt"></i> 25kV AC</span>
-                            </div>
-                        </div>
-                        <div class="line-item line-north">
-                            <div class="line-header">
-                                <span class="line-name">Northern Extension</span>
-                                <span class="line-length">78 km</span>
-                            </div>
-                            <div class="line-stats">
-                                <span><i class="fas fa-tachometer-alt"></i> 160 km/h</span>
-                                <span><i class="fas fa-layer-group"></i> Double Track</span>
-                                <span><i class="fas fa-bolt"></i> 25kV AC</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="panel-card">
-                    <div class="panel-title">
-                        <i class="fas fa-hard-hat"></i>
-                        Engineering Structures
-                    </div>
-                    <div class="engineering-details">
-                        <div class="eng-category">
-                            <div class="eng-header">
-                                <span class="eng-title">
-                                    <i class="fas fa-mountain" style="color: #9C27B0;"></i>
-                                    Tunnels
-                                </span>
-                                <span class="eng-count">18</span>
-                            </div>
-                            <div class="eng-items">
-                                <div>• Jounieh-Beirut: 12.3 km (Twin bore)</div>
-                                <div>• Chekka Pass: 4.7 km</div>
-                                <div>• Damour Heights: 3.2 km</div>
-                                <div>• Total: 28.6 km tunneling</div>
-                            </div>
-                        </div>
-                        <div class="eng-category">
-                            <div class="eng-header">
-                                <span class="eng-title">
-                                    <i class="fas fa-bridge" style="color: #FF9800;"></i>
-                                    Major Bridges
-                                </span>
-                                <span class="eng-count">24</span>
-                            </div>
-                            <div class="eng-items">
-                                <div>• Litani River: 2.8 km cable-stayed</div>
-                                <div>• Nahr Ibrahim: 1.4 km viaduct</div>
-                                <div>• Kadisha Valley: 890m arch bridge</div>
-                                <div>• Total: 18.7 km bridges</div>
-                            </div>
-                        </div>
-                        <div class="eng-category">
-                            <div class="eng-header">
-                                <span class="eng-title">
-                                    <i class="fas fa-layer-group" style="color: #2196F3;"></i>
-                                    Elevated Sections
-                                </span>
-                                <span class="eng-count">42 km</span>
-                            </div>
-                            <div class="eng-items">
-                                <div>• Beirut Urban: 15.2 km</div>
-                                <div>• Tripoli Approach: 8.4 km</div>
-                                <div>• Coastal Protection: 18.4 km</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+            <div class="legend-item">
+                <div class="legend-line" style="background: #0000ff;"></div>
+                <span>Coastal Line</span>
             </div>
-            
-            <div class="map-section">
-                <div class="map-overlay-controls">
-                    <div class="control-card">
-                        <div class="control-title">
-                            <i class="fas fa-layer-group"></i>
-                            Infrastructure Layers
-                        </div>
-                        <div class="control-grid">
-                            <button class="toggle-btn active" id="toggle-mainlines">Main Lines</button>
-                            <button class="toggle-btn active" id="toggle-stations">Stations</button>
-                            <button class="toggle-btn active" id="toggle-tunnels">Tunnels</button>
-                            <button class="toggle-btn active" id="toggle-bridges">Bridges</button>
-                            <button class="toggle-btn active" id="toggle-depots">Rail Yards</button>
-                            <button class="toggle-btn" id="toggle-freight">Freight</button>
-                            <button class="toggle-btn" id="toggle-elevation">Elevation</button>
-                            <button class="toggle-btn" id="toggle-phases">Phases</button>
-                        </div>
-                    </div>
-                    
-                    <div class="control-card">
-                        <div class="control-title">
-                            <i class="fas fa-eye"></i>
-                            Visualization Mode
-                        </div>
-                        <div class="control-grid">
-                            <button class="toggle-btn active" id="view-infrastructure">Infrastructure</button>
-                            <button class="toggle-btn" id="view-operations">Operations</button>
-                            <button class="toggle-btn" id="view-construction">Construction</button>
-                            <button class="toggle-btn" id="view-economic">Economic</button>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="realtime-stats">
-                    <div class="stat-display">
-                        <div class="stat-value">700 km</div>
-                        <div class="stat-label">Total Track</div>
-                    </div>
-                    <div class="stat-display">
-                        <div class="stat-value">68</div>
-                        <div class="stat-label">Stations</div>
-                    </div>
-                    <div class="stat-display">
-                        <div class="stat-value">12</div>
-                        <div class="stat-label">Rail Yards</div>
-                    </div>
-                    <div class="stat-display">
-                        <div class="stat-value">250</div>
-                        <div class="stat-label">Daily Trains</div>
-                    </div>
-                </div>
-                
-                <div class="timeline-view">
-                    <div class="timeline-header">
-                        <i class="fas fa-calendar-alt"></i> Construction Timeline
-                    </div>
-                    <div class="timeline-phases">
-                        <div class="phase-item">
-                            <span class="phase-year">2028-2031</span>
-                            <span class="phase-desc">Phase 3: Bekaa Valley</span>
-                        </div>
-                        <div class="phase-item">
-                            <span class="phase-year">2030-2033</span>
-                            <span class="phase-desc">Phase 4: Northern Extension</span>
-                        </div>
-                    </div>
-                </div>
-                
-                <div id="map"></div>
+            <div class="legend-item">
+                <div class="legend-line" style="background: #00aa00;"></div>
+                <span>Mountain Line</span>
             </div>
-            
-            <div class="right-panel">
-                <div class="panel-card">
-                    <div class="panel-title">
-                        <i class="fas fa-chart-bar"></i>
-                        Infrastructure Metrics
-                    </div>
-                    <div class="infrastructure-grid">
-                        <div class="infra-stat">
-                            <div class="infra-value">485</div>
-                            <div class="infra-label">Double Track km</div>
-                        </div>
-                        <div class="infra-stat">
-                            <div class="infra-value">215</div>
-                            <div class="infra-label">Single Track km</div>
-                        </div>
-                        <div class="infra-stat">
-                            <div class="infra-value">142</div>
-                            <div class="infra-label">Level Crossings</div>
-                        </div>
-                        <div class="infra-stat">
-                            <div class="infra-value">89</div>
-                            <div class="infra-label">Grade Separations</div>
-                        </div>
-                        <div class="infra-stat">
-                            <div class="infra-value">28.6</div>
-                            <div class="infra-label">Tunnel km</div>
-                        </div>
-                        <div class="infra-stat">
-                            <div class="infra-value">18.7</div>
-                            <div class="infra-label">Bridge km</div>
-                        </div>
-                        <div class="infra-stat">
-                            <div class="infra-value">42</div>
-                            <div class="infra-label">Elevated km</div>
-                        </div>
-                        <div class="infra-stat">
-                            <div class="infra-value">156</div>
-                            <div class="infra-label">Substations</div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="panel-card">
-                    <div class="panel-title">
-                        <i class="fas fa-subway"></i>
-                        Major Stations & Terminals
-                    </div>
-                    <div class="station-list">
-                        <div class="station-item">
-                            <div class="station-header">
-                                <span class="station-name">Beirut Central</span>
-                                <span class="station-type">Mega Hub</span>
-                            </div>
-                            <div class="station-details">
-                                <span><i class="fas fa-door-open"></i> 12 platforms</span>
-                                <span><i class="fas fa-users"></i> 150k/day</span>
-                                <span><i class="fas fa-plane"></i> Airport Link</span>
-                            </div>
-                        </div>
-                        <div class="station-item">
-                            <div class="station-header">
-                                <span class="station-name">Tripoli International</span>
-                                <span class="station-type">Major Hub</span>
-                            </div>
-                            <div class="station-details">
-                                <span><i class="fas fa-door-open"></i> 8 platforms</span>
-                                <span><i class="fas fa-users"></i> 80k/day</span>
-                                <span><i class="fas fa-ship"></i> Port Access</span>
-                            </div>
-                        </div>
-                        <div class="station-item">
-                            <div class="station-header">
-                                <span class="station-name">Zahle Junction</span>
-                                <span class="station-type">Regional Hub</span>
-                            </div>
-                            <div class="station-details">
-                                <span><i class="fas fa-door-open"></i> 6 platforms</span>
-                                <span><i class="fas fa-users"></i> 45k/day</span>
-                                <span><i class="fas fa-wine-bottle"></i> Wine Region</span>
-                            </div>
-                        </div>
-                        <div class="station-item">
-                            <div class="station-header">
-                                <span class="station-name">Sidon Maritime</span>
-                                <span class="station-type">Coastal Hub</span>
-                            </div>
-                            <div class="station-details">
-                                <span><i class="fas fa-door-open"></i> 5 platforms</span>
-                                <span><i class="fas fa-users"></i> 35k/day</span>
-                                <span><i class="fas fa-anchor"></i> Port Terminal</span>
-                            </div>
-                        </div>
-                        <div class="station-item">
-                            <div class="station-header">
-                                <span class="station-name">Baalbek Heritage</span>
-                                <span class="station-type">Tourist Hub</span>
-                            </div>
-                            <div class="station-details">
-                                <span><i class="fas fa-door-open"></i> 4 platforms</span>
-                                <span><i class="fas fa-users"></i> 25k/day</span>
-                                <span><i class="fas fa-monument"></i> UNESCO Site</span>
-                            </div>
-                        </div>
-                        <div class="station-item">
-                            <div class="station-header">
-                                <span class="station-name">Jounieh Bay</span>
-                                <span class="station-type">Commuter Hub</span>
-                            </div>
-                            <div class="station-details">
-                                <span><i class="fas fa-door-open"></i> 6 platforms</span>
-                                <span><i class="fas fa-users"></i> 60k/day</span>
-                                <span><i class="fas fa-tram"></i> Cable Car</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="panel-card">
-                    <div class="panel-title">
-                        <i class="fas fa-train"></i>
-                        Rolling Stock Fleet
-                    </div>
-                    <div class="cost-breakdown">
-                        <div class="cost-item">
-                            <span class="cost-label">
-                                <i class="fas fa-rocket"></i> High-Speed EMUs
-                            </span>
-                            <span class="cost-value">24 sets</span>
-                        </div>
-                        <div class="cost-item">
-                            <span class="cost-label">
-                                <i class="fas fa-subway"></i> Regional EMUs
-                            </span>
-                            <span class="cost-value">48 sets</span>
-                        </div>
-                        <div class="cost-item">
-                            <span class="cost-label">
-                                <i class="fas fa-train"></i> Commuter DMUs
-                            </span>
-                            <span class="cost-value">36 sets</span>
-                        </div>
-                        <div class="cost-item">
-                            <span class="cost-label">
-                                <i class="fas fa-truck"></i> Freight Locos
-                            </span>
-                            <span class="cost-value">45 units</span>
-                        </div>
-                        <div class="cost-item">
-                            <span class="cost-label">
-                                <i class="fas fa-tools"></i> Maintenance Units
-                            </span>
-                            <span class="cost-value">18 units</span>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="panel-card">
-                    <div class="panel-title">
-                        <i class="fas fa-warehouse"></i>
-                        Rail Yards & Depots
-                    </div>
-                    <div class="engineering-details">
-                        <div class="eng-category">
-                            <div class="eng-header">
-                                <span class="eng-title">
-                                    <i class="fas fa-tools"></i>
-                                    Main Workshops
-                                </span>
-                                <span class="eng-count">4</span>
-                            </div>
-                            <div class="eng-items">
-                                <div>• Beirut Central: 85 hectares</div>
-                                <div>• Tripoli North: 62 hectares</div>
-                                <div>• Zahle East: 45 hectares</div>
-                                <div>• Tyre South: 38 hectares</div>
-                            </div>
-                        </div>
-                        <div class="eng-category">
-                            <div class="eng-header">
-                                <span class="eng-title">
-                                    <i class="fas fa-boxes"></i>
-                                    Freight Terminals
-                                </span>
-                                <span class="eng-count">8</span>
-                            </div>
-                            <div class="eng-items">
-                                <div>• Port of Beirut: Container terminal</div>
-                                <div>• Tripoli Industrial: Bulk cargo</div>
-                                <div>• Bekaa Agricultural: Grain silos</div>
-                                <div>• Sidon Logistics: Distribution hub</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+            <div class="legend-item">
+                <div class="legend-line" style="background: #ff00ff;"></div>
+                <span>Bekaa Valley Line</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-line" style="background: #ff8800;"></div>
+                <span>Northern Extension</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-line" style="background: #8b4513; border-style: dashed;"></div>
+                <span>Tunnel Section</span>
             </div>
         </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // Initialize map with terrain view
-        const map = L.map('map', {
-            center: [33.8547, 35.8623],
-            zoom: 8.5,
-            zoomControl: false
-        });
+        // Initialize the map
+        const map = L.map('map').setView([33.8547, 35.8623], 9);
 
-        // Add custom zoom control to bottom right
-        L.control.zoom({
-            position: 'bottomright'
+        // Add OpenStreetMap tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19
         }).addTo(map);
 
-        // Dark terrain basemap
-        L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png', {
-            maxZoom: 18,
-            attribution: '© Stadia Maps © OpenMapTiles © OpenStreetMap'
-        }).addTo(map);
-
-        // Layer groups
+        // Create layer groups
         const layers = {
-            mainlines: L.layerGroup().addTo(map),
+            lines: L.layerGroup().addTo(map),
             stations: L.layerGroup().addTo(map),
             tunnels: L.layerGroup().addTo(map),
-            bridges: L.layerGroup().addTo(map),
-            depots: L.layerGroup().addTo(map),
-            freight: L.layerGroup(),
-            elevation: L.layerGroup(),
-            phases: L.layerGroup()
+            bridges: L.layerGroup().addTo(map)
         };
 
-        // Comprehensive station data
-        const stations = [
-            // Major Hubs
-            {
-                name: "Beirut Central",
-                lat: 33.8886,
-                lon: 35.4955,
-                type: "mega-hub",
-                platforms: 12,
-                daily: 150000,
-                connections: ["Metro", "Airport", "Bus Terminal"],
-                elevation: 56
-            },
-            {
-                name: "Tripoli International",
-                lat: 34.4359,
-                lon: 35.8492,
-                type: "major-hub",
-                platforms: 8,
-                daily: 80000,
-                connections: ["Port", "Syria Border"],
-                elevation: 67
-            },
-            {
-                name: "Zahle Junction",
-                lat: 33.8467,
-                lon: 35.9019,
-                type: "regional-hub",
-                platforms: 6,
-                daily: 45000,
-                connections: ["Bekaa Valley", "Damascus Road"],
-                elevation: 945
-            },
-            {
-                name: "Sidon Maritime",
-                lat: 33.5614,
-                lon: 35.3712,
-                type: "coastal-hub",
-                platforms: 5,
-                daily: 35000,
-                connections: ["Port", "Historic City"],
-                elevation: 46
-            },
-            {
-                name: "Tyre Central",
-                lat: 33.2704,
-                lon: 35.2038,
-                type: "coastal-hub",
-                platforms: 5,
-                daily: 30000,
-                connections: ["Port", "Archaeological Site"],
-                elevation: 28
-            },
-            {
-                name: "Baalbek Heritage",
-                lat: 34.0067,
-                lon: 36.2040,
-                type: "tourist-hub",
-                platforms: 4,
-                daily: 25000,
-                connections: ["UNESCO Site", "Tourist Center"],
-                elevation: 1170
-            },
-            {
-                name: "Jounieh Bay",
-                lat: 33.9811,
-                lon: 35.6178,
-                type: "commuter-hub",
-                platforms: 6,
-                daily: 60000,
-                connections: ["Cable Car", "Marina"],
-                elevation: 89
-            },
-            // Secondary Stations
-            {
-                name: "Byblos Historic",
-                lat: 34.1236,
-                lon: 35.6517,
-                type: "regional",
-                platforms: 3,
-                daily: 20000,
-                elevation: 35
-            },
-            {
-                name: "Batroun Coastal",
-                lat: 34.2556,
-                lon: 35.6572,
-                type: "regional",
-                platforms: 2,
-                daily: 15000,
-                elevation: 42
-            },
-            {
-                name: "Chekka Industrial",
-                lat: 34.3194,
-                lon: 35.7267,
-                type: "freight",
-                platforms: 4,
-                daily: 5000,
-                elevation: 58
-            },
-            {
-                name: "Damour Valley",
-                lat: 33.7356,
-                lon: 35.4581,
-                type: "local",
-                platforms: 2,
-                daily: 12000,
-                elevation: 125
-            },
-            {
-                name: "Nahr Ibrahim",
-                lat: 34.0692,
-                lon: 35.6347,
-                type: "local",
-                platforms: 2,
-                daily: 8000,
-                elevation: 78
-            }
-        ];
-
-        // Rail yard/depot data
-        const railYards = [
-            {
-                name: "Beirut Central Maintenance",
-                lat: 33.8750,
-                lon: 35.5150,
-                type: "main-workshop",
-                area: 85,
-                tracks: 48,
-                capacity: "200 units"
-            },
-            {
-                name: "Tripoli North Workshop",
-                lat: 34.4550,
-                lon: 35.8350,
-                type: "main-workshop",
-                area: 62,
-                tracks: 36,
-                capacity: "150 units"
-            },
-            {
-                name: "Zahle East Depot",
-                lat: 33.8350,
-                lon: 35.9250,
-                type: "regional-depot",
-                area: 45,
-                tracks: 24,
-                capacity: "100 units"
-            },
-            {
-                name: "Port of Beirut Freight",
-                lat: 33.9050,
-                lon: 35.5180,
-                type: "freight-terminal",
-                area: 35,
-                tracks: 18,
-                capacity: "Container terminal"
-            },
-            {
-                name: "Tripoli Industrial Freight",
-                lat: 34.4750,
-                lon: 35.8250,
-                type: "freight-terminal",
-                area: 28,
-                tracks: 12,
-                capacity: "Bulk cargo"
-            },
-            {
-                name: "Bekaa Agricultural Terminal",
-                lat: 33.7650,
-                lon: 35.8850,
-                type: "freight-terminal",
-                area: 22,
-                tracks: 8,
-                capacity: "Grain silos"
-            }
-        ];
-
-        // Complex railway lines with realistic routing
+        // Railway lines data
         const railwayLines = [
             {
-                name: "Beirut-Tripoli Main Line",
-                type: "high-speed",
-                color: "#ff4444",
-                weight: 6,
+                name: "Beirut-Tripoli High-Speed Line",
                 coordinates: [
                     [33.8886, 35.4955], // Beirut Central
-                    [33.9150, 35.5250], // Beirut North
-                    [33.9450, 35.5550], // Nahr el-Kalb crossing
-                    [33.9811, 35.6178], // Jounieh (tunnel start)
-                    [34.0150, 35.6350], // Tunnel exit
+                    [33.9200, 35.5300], // North Beirut
+                    [33.9500, 35.5600], // Antelias
+                    [33.9811, 35.6178], // Jounieh
+                    [34.0200, 35.6400], // Tabarja
                     [34.0692, 35.6347], // Nahr Ibrahim
                     [34.1236, 35.6517], // Byblos
-                    [34.1850, 35.6750], // Amchit
+                    [34.1800, 35.6700], // Amchit
                     [34.2556, 35.6572], // Batroun
                     [34.3194, 35.7267], // Chekka
-                    [34.3850, 35.7950], // El-Mina approach
+                    [34.3800, 35.7900], // Enfeh
                     [34.4359, 35.8492]  // Tripoli
                 ],
-                infrastructure: {
-                    tunnels: [[33.9811, 34.0150]], // Jounieh mountain tunnel
-                    bridges: [[33.9450, 33.9550], [34.0650, 34.0750]], // Major crossings
-                    elevated: [[33.8886, 33.9150], [34.3850, 34.4359]] // Urban sections
-                }
+                color: '#ff0000',
+                weight: 6,
+                opacity: 0.8
             },
             {
                 name: "Mediterranean Coastal Line",
-                type: "regional",
-                color: "#4444ff",
-                weight: 5,
                 coordinates: [
                     [33.2704, 35.2038], // Tyre
-                    [33.3250, 35.2450], // Rachidiye
-                    [33.4150, 35.2950], // Litani crossing
-                    [33.4850, 35.3350], // Sarafand
+                    [33.3200, 35.2400], // Rachidieh
+                    [33.3800, 35.2800], // Qasmieh
+                    [33.4400, 35.3200], // Litani Crossing
+                    [33.5000, 35.3500], // Sarafand
                     [33.5614, 35.3712], // Sidon
-                    [33.6350, 35.4050], // Jiyeh
+                    [33.6200, 35.4000], // Jiyeh
+                    [33.6800, 35.4300], // Rmeileh
                     [33.7356, 35.4581], // Damour
-                    [33.8150, 35.4750], // Khalde
+                    [33.7900, 35.4750], // Naameh
+                    [33.8400, 35.4850], // Khalde
                     [33.8886, 35.4955]  // Beirut Central
                 ],
-                infrastructure: {
-                    bridges: [[33.4050, 33.4250]], // Litani River bridge
-                    elevated: [[33.8150, 33.8886]] // Beirut approach
-                }
+                color: '#0000ff',
+                weight: 5,
+                opacity: 0.8
             },
             {
                 name: "Mount Lebanon Express",
-                type: "mountain",
-                color: "#44ff44",
-                weight: 4,
                 coordinates: [
                     [33.8886, 35.4955], // Beirut
-                    [33.8650, 35.5450], // Hazmieh
-                    [33.8450, 35.5950], // Beit Mery
-                    [33.8250, 35.6450], // Broummana
-                    [33.8150, 35.7250], // Baskinta
-                    [33.8350, 35.8050], // Sannine approach
+                    [33.8700, 35.5200], // Hazmieh
+                    [33.8500, 35.5500], // Baabda
+                    [33.8400, 35.5800], // Aley
+                    [33.8300, 35.6200], // Bhamdoun
+                    [33.8200, 35.6600], // Sofar
+                    [33.8150, 35.7200], // Mdeirej
+                    [33.8200, 35.7800], // Dahr el Baidar
+                    [33.8300, 35.8400], // Chtaura
                     [33.8467, 35.9019]  // Zahle
                 ],
-                infrastructure: {
-                    tunnels: [[33.8250, 33.8350]], // Mountain tunnels
-                    bridges: [[33.8450, 33.8550]], // Valley crossings
-                    cuttings: [[33.8150, 33.8250]] // Rock cuttings
-                }
+                color: '#00aa00',
+                weight: 5,
+                opacity: 0.8
             },
             {
                 name: "Bekaa Valley Line",
-                type: "regional",
-                color: "#ff44ff",
-                weight: 5,
                 coordinates: [
                     [33.8467, 35.9019], // Zahle
-                    [33.9150, 35.9850], // Rayak
-                    [33.9850, 36.0850], // Ras Baalbek
+                    [33.8800, 35.9500], // Kab Elias
+                    [33.9200, 36.0000], // Bar Elias
+                    [33.9600, 36.0500], // Rayak
                     [34.0067, 36.2040], // Baalbek
-                    [34.0850, 36.2850], // Labweh
-                    [34.1650, 36.3750], // Arsal approach
-                    [34.2450, 36.4250]  // Northern Bekaa
+                    [34.0500, 36.2500], // Iaat
+                    [34.1000, 36.3000], // Laboue
+                    [34.1500, 36.3500], // Arsal Junction
                 ],
-                infrastructure: {
-                    bridges: [[33.9150, 33.9250], [34.0050, 34.0150]]
-                }
+                color: '#ff00ff',
+                weight: 5,
+                opacity: 0.8
             },
             {
                 name: "Northern Extension",
-                type: "regional",
-                color: "#ffaa44",
-                weight: 5,
                 coordinates: [
                     [34.4359, 35.8492], // Tripoli
-                    [34.4950, 35.8850], // Qalamoun
-                    [34.5550, 35.9250], // Minieh
-                    [34.6150, 35.9650], // Sir ed-Danniye
-                    [34.6650, 36.0150]  // Akkar Plain
+                    [34.4700, 35.8800], // Qalamoun
+                    [34.5100, 35.9200], // Miniyeh
+                    [34.5500, 35.9600], // Sir ed-Danniyeh
+                    [34.5900, 36.0000], // Bebnine
+                    [34.6300, 36.0400], // Akkar
+                    [34.6600, 36.0800]  // Qobayat
                 ],
-                infrastructure: {
-                    bridges: [[34.5450, 34.5650]],
-                    cuttings: [[34.6050, 34.6250]]
-                }
+                color: '#ff8800',
+                weight: 5,
+                opacity: 0.8
             }
         ];
 
-        // Major engineering structures
-        const majorStructures = {
-            tunnels: [
-                {
-                    name: "Jounieh-Beirut Mountain Tunnel",
-                    start: [33.9811, 35.6178],
-                    end: [34.0150, 35.6350],
-                    length: 12.3,
-                    type: "twin-bore",
-                    depth: 180,
-                    cost: 850
-                },
-                {
-                    name: "Chekka Pass Tunnel",
-                    start: [34.3050, 35.7150],
-                    end: [34.3350, 35.7450],
-                    length: 4.7,
-                    type: "single-bore",
-                    depth: 120,
-                    cost: 320
-                },
-                {
-                    name: "Damour Heights Tunnel",
-                    start: [33.7250, 35.4450],
-                    end: [33.7450, 35.4650],
-                    length: 3.2,
-                    type: "twin-bore",
-                    depth: 95,
-                    cost: 220
-                }
-            ],
-            bridges: [
-                {
-                    name: "Litani River Viaduct",
-                    center: [33.4150, 35.2950],
-                    length: 2.8,
-                    height: 65,
-                    type: "cable-stayed",
-                    spans: 5,
-                    cost: 180
-                },
-                {
-                    name: "Nahr Ibrahim Viaduct",
-                    center: [34.0692, 35.6347],
-                    length: 1.4,
-                    height: 45,
-                    type: "arch",
-                    spans: 3,
-                    cost: 95
-                },
-                {
-                    name: "Kadisha Valley Bridge",
-                    center: [34.3850, 35.7850],
-                    length: 0.89,
-                    height: 85,
-                    type: "arch",
-                    spans: 2,
-                    cost: 120
-                }
-            ]
-        };
+        // Major stations data
+        const stations = [
+            { name: "Beirut Central", coords: [33.8886, 35.4955], type: "mega", platforms: 12, passengers: "150k/day" },
+            { name: "Tripoli International", coords: [34.4359, 35.8492], type: "major", platforms: 8, passengers: "80k/day" },
+            { name: "Zahle Junction", coords: [33.8467, 35.9019], type: "major", platforms: 6, passengers: "45k/day" },
+            { name: "Sidon Maritime", coords: [33.5614, 35.3712], type: "major", platforms: 5, passengers: "35k/day" },
+            { name: "Tyre Central", coords: [33.2704, 35.2038], type: "major", platforms: 5, passengers: "30k/day" },
+            { name: "Baalbek Heritage", coords: [34.0067, 36.2040], type: "major", platforms: 4, passengers: "25k/day" },
+            { name: "Jounieh Bay", coords: [33.9811, 35.6178], type: "regional", platforms: 6, passengers: "60k/day" },
+            { name: "Byblos Historic", coords: [34.1236, 35.6517], type: "regional", platforms: 3, passengers: "20k/day" },
+            { name: "Batroun Coastal", coords: [34.2556, 35.6572], type: "regional", platforms: 2, passengers: "15k/day" },
+            { name: "Damour Valley", coords: [33.7356, 35.4581], type: "local", platforms: 2, passengers: "12k/day" },
+            { name: "Chekka Industrial", coords: [34.3194, 35.7267], type: "freight", platforms: 4, passengers: "5k/day" }
+        ];
 
-        // Function to create station markers
-        function createStationMarker(station) {
-            const iconSize = {
-                'mega-hub': 40,
-                'major-hub': 35,
-                'regional-hub': 30,
-                'coastal-hub': 30,
-                'tourist-hub': 28,
-                'commuter-hub': 28,
-                'regional': 24,
-                'freight': 26,
-                'local': 20
-            };
-            
-            const iconSymbol = {
-                'mega-hub': '🚄',
-                'major-hub': '🚅',
-                'regional-hub': '🚉',
-                'coastal-hub': '🚊',
-                'tourist-hub': '🎫',
-                'commuter-hub': '🚇',
-                'regional': '🚈',
-                'freight': '📦',
-                'local': '🚏'
-            };
-            
-            const icon = L.divIcon({
-                className: 'custom-icon',
-                html: `<div style="font-size: ${iconSize[station.type]}px;">${iconSymbol[station.type]}</div>`,
-                iconSize: [iconSize[station.type], iconSize[station.type]],
-                iconAnchor: [iconSize[station.type]/2, iconSize[station.type]/2]
+        // Tunnel sections
+        const tunnels = [
+            {
+                name: "Jounieh-Beirut Mountain Tunnel",
+                coords: [[33.9811, 35.6178], [34.0200, 35.6400]],
+                length: "12.3 km",
+                type: "Twin-bore"
+            },
+            {
+                name: "Chekka Pass Tunnel",
+                coords: [[34.3000, 35.7100], [34.3300, 35.7400]],
+                length: "4.7 km",
+                type: "Single-bore"
+            },
+            {
+                name: "Damour Heights Tunnel",
+                coords: [[33.7200, 35.4400], [33.7400, 35.4600]],
+                length: "3.2 km",
+                type: "Twin-bore"
+            },
+            {
+                name: "Dahr el Baidar Tunnel",
+                coords: [[33.8150, 35.7200], [33.8200, 35.7800]],
+                length: "6.8 km",
+                type: "Twin-bore"
+            }
+        ];
+
+        // Major bridges
+        const bridges = [
+            { name: "Litani River Bridge", coords: [33.4400, 35.3200], length: "2.8 km", height: "65m" },
+            { name: "Nahr Ibrahim Viaduct", coords: [34.0692, 35.6347], length: "1.4 km", height: "45m" },
+            { name: "Kadisha Valley Bridge", coords: [34.3500, 35.7600], length: "890m", height: "85m" },
+            { name: "Nahr el-Kalb Bridge", coords: [33.9450, 35.5550], length: "650m", height: "40m" },
+            { name: "Awali River Bridge", coords: [33.6500, 35.4150], length: "480m", height: "35m" }
+        ];
+
+        // Add railway lines
+        railwayLines.forEach(line => {
+            const polyline = L.polyline(line.coordinates, {
+                color: line.color,
+                weight: line.weight,
+                opacity: line.opacity,
+                smoothFactor: 1
             });
             
-            const marker = L.marker([station.lat, station.lon], {icon: icon});
-            
-            const popupContent = `
-                <div style="min-width: 280px; font-family: Arial, sans-serif;">
-                    <h3 style="margin: 0 0 10px 0; color: #00ffff;">${station.name}</h3>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                        <div style="background: rgba(0,0,0,0.3); padding: 8px; border-radius: 4px;">
-                            <div style="font-size: 18px; font-weight: bold; color: #00ff88;">${tunnel.length} km</div>
-                            <div style="font-size: 11px; color: #888;">Length</div>
-                        </div>
-                        <div style="background: rgba(0,0,0,0.3); padding: 8px; border-radius: 4px;">
-                            <div style="font-size: 18px; font-weight: bold; color: #00ff88;">${tunnel.depth}m</div>
-                            <div style="font-size: 11px; color: #888;">Max Depth</div>
-                        </div>
+            polyline.bindPopup(`
+                <div class="popup-title">${line.name}</div>
+                <div class="popup-info">
+                    <div class="popup-stat">
+                        <span>Length:</span>
+                        <strong>~${Math.round(line.coordinates.length * 12)} km</strong>
                     </div>
-                    <div style="margin-top: 10px; font-size: 13px;">
-                        <div><strong>Type:</strong> ${tunnel.type}</div>
-                        <div><strong>Construction Cost:</strong> €${tunnel.cost}M</div>
-                        <div style="margin-top: 8px; padding: 8px; background: rgba(0,0,0,0.3); border-radius: 4px;">
-                            <div style="font-size: 11px; color: #888;">Features:</div>
-                            <div style="font-size: 12px;">• Emergency exits every 500m</div>
-                            <div style="font-size: 12px;">• Ventilation shafts every 800m</div>
-                            <div style="font-size: 12px;">• ERTMS Level 2 signaling</div>
-                        </div>
+                    <div class="popup-stat">
+                        <span>Stations:</span>
+                        <strong>${line.coordinates.length}</strong>
+                    </div>
+                    <div class="popup-stat">
+                        <span>Max Speed:</span>
+                        <strong>${line.name.includes('High-Speed') ? '200' : '160'} km/h</strong>
                     </div>
                 </div>
-            `;
+            `);
             
-            line.bindPopup(popupContent);
-            return line;
-        }
+            layers.lines.addLayer(polyline);
+        });
 
-        // Function to create bridge visualization
-        function createBridge(bridge) {
-            const marker = L.circleMarker(bridge.center, {
-                radius: 12,
-                fillColor: '#FF9800',
-                color: '#fff',
+        // Add stations
+        stations.forEach(station => {
+            const iconSize = station.type === 'mega' ? 30 : station.type === 'major' ? 25 : 20;
+            const icon = L.divIcon({
+                html: `<div class="station-icon" style="font-size: ${iconSize}px;">🚉</div>`,
+                iconSize: [iconSize, iconSize],
+                className: 'station-marker'
+            });
+            
+            const marker = L.marker(station.coords, { icon: icon });
+            
+            marker.bindPopup(`
+                <div class="popup-title">${station.name}</div>
+                <div class="popup-info">
+                    <div class="popup-stat">
+                        <span>Type:</span>
+                        <strong>${station.type.charAt(0).toUpperCase() + station.type.slice(1)} Station</strong>
+                    </div>
+                    <div class="popup-stat">
+                        <span>Platforms:</span>
+                        <strong>${station.platforms}</strong>
+                    </div>
+                    <div class="popup-stat">
+                        <span>Daily Passengers:</span>
+                        <strong>${station.passengers}</strong>
+                    </div>
+                </div>
+            `);
+            
+            layers.stations.addLayer(marker);
+        });
+
+        // Add tunnels
+        tunnels.forEach(tunnel => {
+            const tunnelLine = L.polyline(tunnel.coords, {
+                color: '#8b4513',
+                weight: 8,
+                opacity: 0.7,
+                dashArray: '10, 5'
+            });
+            
+            tunnelLine.bindPopup(`
+                <div class="popup-title">🚇 ${tunnel.name}</div>
+                <div class="popup-info">
+                    <div class="popup-stat">
+                        <span>Length:</span>
+                        <strong>${tunnel.length}</strong>
+                    </div>
+                    <div class="popup-stat">
+                        <span>Type:</span>
+                        <strong>${tunnel.type}</strong>
+                    </div>
+                </div>
+            `);
+            
+            layers.tunnels.addLayer(tunnelLine);
+        });
+
+        // Add bridges
+        bridges.forEach(bridge => {
+            const bridgeMarker = L.circleMarker(bridge.coords, {
+                radius: 10,
+                fillColor: '#ff6600',
+                color: '#ffffff',
                 weight: 2,
                 opacity: 1,
                 fillOpacity: 0.8
             });
             
-            const popupContent = `
-                <div style="min-width: 250px;">
-                    <h3 style="margin: 0 0 10px 0; color: #FF9800;">🌉 ${bridge.name}</h3>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                        <div style="background: rgba(0,0,0,0.3); padding: 8px; border-radius: 4px;">
-                            <div style="font-size: 18px; font-weight: bold; color: #00ff88;">${bridge.length} km</div>
-                            <div style="font-size: 11px; color: #888;">Length</div>
-                        </div>
-                        <div style="background: rgba(0,0,0,0.3); padding: 8px; border-radius: 4px;">
-                            <div style="font-size: 18px; font-weight: bold; color: #00ff88;">${bridge.height}m</div>
-                            <div style="font-size: 11px; color: #888;">Height</div>
-                        </div>
+            bridgeMarker.bindPopup(`
+                <div class="popup-title">🌉 ${bridge.name}</div>
+                <div class="popup-info">
+                    <div class="popup-stat">
+                        <span>Length:</span>
+                        <strong>${bridge.length}</strong>
                     </div>
-                    <div style="margin-top: 10px; font-size: 13px;">
-                        <div><strong>Type:</strong> ${bridge.type}</div>
-                        <div><strong>Spans:</strong> ${bridge.spans}</div>
-                        <div><strong>Construction Cost:</strong> €${bridge.cost}M</div>
-                        <div style="margin-top: 8px; padding: 8px; background: rgba(0,0,0,0.3); border-radius: 4px;">
-                            <div style="font-size: 11px; color: #888;">Engineering:</div>
-                            <div style="font-size: 12px;">• Seismic isolation bearings</div>
-                            <div style="font-size: 12px;">• Wind-resistant design</div>
-                            <div style="font-size: 12px;">• LED architectural lighting</div>
-                        </div>
+                    <div class="popup-stat">
+                        <span>Height:</span>
+                        <strong>${bridge.height}</strong>
                     </div>
-                </div>
-            `;
-            
-            marker.bindPopup(popupContent);
-            return marker;
-        }
-
-        // Add all stations to map
-        stations.forEach(station => {
-            layers.stations.addLayer(createStationMarker(station));
-        });
-
-        // Add rail yards to map
-        railYards.forEach(yard => {
-            layers.depots.addLayer(createRailYardMarker(yard));
-        });
-
-        // Add railway lines to map
-        railwayLines.forEach(line => {
-            layers.mainlines.addLayer(createRailwayLine(line));
-        });
-
-        // Add major structures
-        majorStructures.tunnels.forEach(tunnel => {
-            layers.tunnels.addLayer(createTunnel(tunnel));
-        });
-
-        majorStructures.bridges.forEach(bridge => {
-            layers.bridges.addLayer(createBridge(bridge));
-        });
-
-        // Add elevation contours (simulated)
-        const elevationContours = [
-            {
-                coords: [[33.7, 35.4], [33.75, 35.5], [33.8, 35.6], [33.85, 35.7], [33.9, 35.8]],
-                elevation: 500,
-                color: '#004400'
-            },
-            {
-                coords: [[33.75, 35.45], [33.8, 35.55], [33.85, 35.65], [33.9, 35.75], [33.95, 35.85]],
-                elevation: 1000,
-                color: '#006600'
-            },
-            {
-                coords: [[33.8, 35.5], [33.85, 35.6], [33.9, 35.7], [33.95, 35.8], [34.0, 35.9]],
-                elevation: 1500,
-                color: '#008800'
-            }
-        ];
-
-        elevationContours.forEach(contour => {
-            const line = L.polyline(contour.coords, {
-                color: contour.color,
-                weight: 2,
-                opacity: 0.6
-            });
-            line.bindPopup(`Elevation: ${contour.elevation}m`);
-            layers.elevation.addLayer(line);
-        });
-
-        // Add construction phases visualization
-        const constructionPhases = [
-            {
-                name: "Phase 1: Beirut-Jounieh (2025-2027)",
-                coords: [[33.8886, 35.4955], [33.9811, 35.6178]],
-                color: '#00ff00',
-                progress: 65
-            },
-            {
-                name: "Phase 2: Coastal Main (2026-2029)",
-                coords: [[33.2704, 35.2038], [33.8886, 35.4955]],
-                color: '#ffff00',
-                progress: 35
-            },
-            {
-                name: "Phase 3: Bekaa Valley (2028-2031)",
-                coords: [[33.8467, 35.9019], [34.0067, 36.2040]],
-                color: '#ff9900',
-                progress: 15
-            },
-            {
-                name: "Phase 4: Northern Extension (2030-2033)",
-                coords: [[34.4359, 35.8492], [34.6650, 36.0150]],
-                color: '#ff0000',
-                progress: 5
-            }
-        ];
-
-        constructionPhases.forEach(phase => {
-            const line = L.polyline(phase.coords, {
-                color: phase.color,
-                weight: 10,
-                opacity: 0.6
-            });
-            line.bindPopup(`
-                <div>
-                    <h4>${phase.name}</h4>
-                    <div style="background: #333; height: 20px; border-radius: 10px; overflow: hidden;">
-                        <div style="background: ${phase.color}; height: 100%; width: ${phase.progress}%;"></div>
-                    </div>
-                    <div style="text-align: center; margin-top: 5px;">${phase.progress}% Complete</div>
                 </div>
             `);
-            layers.phases.addLayer(line);
+            
+            layers.bridges.addLayer(bridgeMarker);
         });
 
         // Toggle controls
-        document.getElementById('toggle-mainlines').addEventListener('click', function(e) {
-            e.target.classList.toggle('active');
-            if (e.target.classList.contains('active')) {
-                map.addLayer(layers.mainlines);
-            } else {
-                map.removeLayer(layers.mainlines);
-            }
-        });
+        const toggleButtons = {
+            'toggle-lines': layers.lines,
+            'toggle-stations': layers.stations,
+            'toggle-tunnels': layers.tunnels,
+            'toggle-bridges': layers.bridges
+        };
 
-        document.getElementById('toggle-stations').addEventListener('click', function(e) {
-            e.target.classList.toggle('active');
-            if (e.target.classList.contains('active')) {
-                map.addLayer(layers.stations);
-            } else {
-                map.removeLayer(layers.stations);
-            }
-        });
-
-        document.getElementById('toggle-tunnels').addEventListener('click', function(e) {
-            e.target.classList.toggle('active');
-            if (e.target.classList.contains('active')) {
-                map.addLayer(layers.tunnels);
-            } else {
-                map.removeLayer(layers.tunnels);
-            }
-        });
-
-        document.getElementById('toggle-bridges').addEventListener('click', function(e) {
-            e.target.classList.toggle('active');
-            if (e.target.classList.contains('active')) {
-                map.addLayer(layers.bridges);
-            } else {
-                map.removeLayer(layers.bridges);
-            }
-        });
-
-        document.getElementById('toggle-depots').addEventListener('click', function(e) {
-            e.target.classList.toggle('active');
-            if (e.target.classList.contains('active')) {
-                map.addLayer(layers.depots);
-            } else {
-                map.removeLayer(layers.depots);
-            }
-        });
-
-        document.getElementById('toggle-freight').addEventListener('click', function(e) {
-            e.target.classList.toggle('active');
-            if (e.target.classList.contains('active')) {
-                map.addLayer(layers.freight);
-            } else {
-                map.removeLayer(layers.freight);
-            }
-        });
-
-        document.getElementById('toggle-elevation').addEventListener('click', function(e) {
-            e.target.classList.toggle('active');
-            if (e.target.classList.contains('active')) {
-                map.addLayer(layers.elevation);
-            } else {
-                map.removeLayer(layers.elevation);
-            }
-        });
-
-        document.getElementById('toggle-phases').addEventListener('click', function(e) {
-            e.target.classList.toggle('active');
-            if (e.target.classList.contains('active')) {
-                map.addLayer(layers.phases);
-            } else {
-                map.removeLayer(layers.phases);
-            }
-        });
-
-        // Visualization mode controls
-        const viewModes = ['infrastructure', 'operations', 'construction', 'economic'];
-        viewModes.forEach(mode => {
-            document.getElementById(`view-${mode}`).addEventListener('click', function(e) {
-                // Remove active class from all
-                viewModes.forEach(m => {
-                    document.getElementById(`view-${m}`).classList.remove('active');
-                });
-                // Add active to clicked
-                e.target.classList.add('active');
-                
-                // Update visualization based on mode
-                updateVisualizationMode(mode);
+        Object.keys(toggleButtons).forEach(buttonId => {
+            const button = document.getElementById(buttonId);
+            button.addEventListener('click', function() {
+                const layer = toggleButtons[buttonId];
+                if (map.hasLayer(layer)) {
+                    map.removeLayer(layer);
+                    button.classList.add('inactive');
+                } else {
+                    map.addLayer(layer);
+                    button.classList.remove('inactive');
+                }
             });
         });
-
-        function updateVisualizationMode(mode) {
-            // This would change the visualization style based on the selected mode
-            console.log(`Switching to ${mode} view`);
-            
-            // Example: Change colors or show different data based on mode
-            switch(mode) {
-                case 'operations':
-                    // Show train frequencies, passenger flows
-                    break;
-                case 'construction':
-                    // Show construction progress, phases
-                    map.addLayer(layers.phases);
-                    break;
-                case 'economic':
-                    // Show cost per km, revenue projections
-                    break;
-                default:
-                    // Infrastructure view (default)
-                    break;
-            }
-        }
-
-        // Animate construction progress
-        let progressInterval = setInterval(() => {
-            const progressFill = document.querySelector('.progress-fill');
-            const currentWidth = parseInt(progressFill.style.width || '35');
-            if (currentWidth < 100) {
-                progressFill.style.width = (currentWidth + 0.1) + '%';
-            }
-        }, 5000);
-
-        // Add freight terminals with special markers
-        const freightTerminals = [
-            {
-                name: "Beirut Container Terminal",
-                lat: 33.9050,
-                lon: 35.5180,
-                type: "container",
-                capacity: "2M TEU/year",
-                connections: ["Port", "Highway"]
-            },
-            {
-                name: "Tripoli Bulk Terminal",
-                lat: 34.4750,
-                lon: 35.8250,
-                type: "bulk",
-                capacity: "5M tons/year",
-                connections: ["Port", "Industrial Zone"]
-            },
-            {
-                name: "Zahle Agricultural Hub",
-                lat: 33.8350,
-                lon: 35.9150,
-                type: "agricultural",
-                capacity: "1M tons/year",
-                connections: ["Bekaa Farms", "Damascus Road"]
-            }
-        ];
-
-        freightTerminals.forEach(terminal => {
-            const icon = L.divIcon({
-                className: 'custom-icon',
-                html: '<div style="font-size: 28px;">🏭</div>',
-                iconSize: [28, 28],
-                iconAnchor: [14, 14]
-            });
-            
-            const marker = L.marker([terminal.lat, terminal.lon], {icon: icon});
-            
-            marker.bindPopup(`
-                <div style="min-width: 250px;">
-                    <h3 style="color: #ffaa44;">${terminal.name}</h3>
-                    <div>Type: ${terminal.type}</div>
-                    <div>Capacity: ${terminal.capacity}</div>
-                    <div>Connections: ${terminal.connections.join(', ')}</div>
-                </div>
-            `);
-            
-            layers.freight.addLayer(marker);
-        });
-
-        // Initialize map bounds to show entire network
-        const bounds = L.latLngBounds(
-            [33.2704, 35.2038], // Southwest
-            [34.6650, 36.4250]  // Northeast
-        );
-        map.fitBounds(bounds, {padding: [50, 50]});
 
         // Add scale control
         L.control.scale({
             position: 'bottomleft',
             imperial: false
         }).addTo(map);
+
+        // Fit map to show all content
+        const allCoords = [];
+        railwayLines.forEach(line => allCoords.push(...line.coordinates));
+        stations.forEach(station => allCoords.push(station.coords));
+        
+        const bounds = L.latLngBounds(allCoords);
+        map.fitBounds(bounds.pad(0.1));
     </script>
 </body>
-</html>10px; margin-bottom: 10px;">
-                        <div style="background: rgba(0,0,0,0.3); padding: 8px; border-radius: 4px;">
-                            <div style="font-size: 20px; font-weight: bold; color: #00ff88;">${station.platforms}</div>
-                            <div style="font-size: 11px; color: #888;">Platforms</div>
-                        </div>
-                        <div style="background: rgba(0,0,0,0.3); padding: 8px; border-radius: 4px;">
-                            <div style="font-size: 20px; font-weight: bold; color: #00ff88;">${(station.daily/1000).toFixed(0)}k</div>
-                            <div style="font-size: 11px; color: #888;">Daily Passengers</div>
-                        </div>
-                    </div>
-                    ${station.connections ? `
-                    <div style="margin-bottom: 10px;">
-                        <strong style="color: #00ffff;">Connections:</strong>
-                        <div style="display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px;">
-                            ${station.connections.map(conn => 
-                                `<span style="background: rgba(0,255,255,0.2); padding: 2px 8px; border-radius: 12px; font-size: 12px;">${conn}</span>`
-                            ).join('')}
-                        </div>
-                    </div>
-                    ` : ''}
-                    <div style="display: flex; justify-content: space-between; font-size: 12px; color: #888;">
-                        <span>Type: ${station.type.replace('-', ' ')}</span>
-                        <span>Elevation: ${station.elevation}m</span>
-                    </div>
-                </div>
-            `;
-            
-            marker.bindPopup(popupContent, {
-                maxWidth: 300,
-                className: 'custom-popup'
-            });
-            
-            return marker;
-        }
-
-        // Function to create rail yard markers
-        function createRailYardMarker(yard) {
-            const icon = L.divIcon({
-                className: 'custom-icon',
-                html: `<div style="font-size: 30px;">🏗️</div>`,
-                iconSize: [30, 30],
-                iconAnchor: [15, 15]
-            });
-            
-            const marker = L.marker([yard.lat, yard.lon], {icon: icon});
-            
-            const popupContent = `
-                <div style="min-width: 250px;">
-                    <h3 style="margin: 0 0 10px 0; color: #ffaa44;">${yard.name}</h3>
-                    <div style="display: grid; gap: 8px;">
-                        <div style="display: flex; justify-content: space-between;">
-                            <span style="color: #888;">Area:</span>
-                            <span style="font-weight: bold;">${yard.area} hectares</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between;">
-                            <span style="color: #888;">Tracks:</span>
-                            <span style="font-weight: bold;">${yard.tracks}</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between;">
-                            <span style="color: #888;">Capacity:</span>
-                            <span style="font-weight: bold;">${yard.capacity}</span>
-                        </div>
-                        <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.2);">
-                            <span style="font-size: 12px; color: #888;">Type: ${yard.type.replace('-', ' ')}</span>
-                        </div>
-                    </div>
-                </div>
-            `;
-            
-            marker.bindPopup(popupContent);
-            return marker;
-        }
-
-        // Function to create railway lines with infrastructure
-        function createRailwayLine(line) {
-            const polyline = L.polyline(line.coordinates, {
-                color: line.color,
-                weight: line.weight,
-                opacity: 0.8
-            });
-            
-            const popupContent = `
-                <div style="min-width: 220px;">
-                    <h3 style="margin: 0 0 10px 0; color: blue">${line.name}</h3>
-                    <div style="font-size: 13px; line-height: 1.6;">
-                        <div><strong>Type:</strong> ${line.type.replace('-', ' ')}</div>
-                        <div><strong>Length:</strong> ~${(line.coordinates.length * 8).toFixed(0)} km</div>
-                        <div><strong>Max Speed:</strong> ${line.type === 'high-speed' ? '200' : line.type === 'mountain' ? '120' : '160'} km/h</div>
-                    </div>
-                </div>
-            `;
-            
-            polyline.bindPopup(popupContent);
-            return polyline;
-        }
-
-        // Function to create tunnel visualization
-        function createTunnel(tunnel) {
-            const line = L.polyline([tunnel.start, tunnel.end], {
-                color: '#9C27B0',
-                weight: 8,
-                opacity: 0.7,
-                dashArray: '10, 5'
-            });
-            
-            const popupContent = `
-                <div style="min-width: 250px;">
-                    <h3 style="margin: 0 0 10px 0; color: #9C27B0;">🚇 ${tunnel.name}</h3>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr;">
-                            <span class="phase-year">2025-2027</span>
-                            <span class="phase-desc">Phase 1: Beirut-Jounieh</span>
-                        </div>
-                        <div class="phase-item">
-                            <span class="phase-year">2026-2029</span>
-                            <span class="phase-desc">Phase 2: Coastal Main Line</span>
-                        </div>
-                        <div class="phase-item">
-                    </div>
-                </div>
+</html>
