@@ -485,4 +485,3 @@ We're here to help you contribute successfully!
 
 By contributing, you agree that your contributions will be licensed under the same license as the project (specify your license here).
 
-Thank you for helping improve the Lebanon Railway Network Map! 🚄🇱🇧
