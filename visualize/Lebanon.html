@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lebanon Future Transit – Geo‑Reference Draft</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #f2f2f2;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 0;
+    }
+    h1 {
+      margin-bottom: 1rem;
+      font-size: 1.8rem;
+      text-align: center;
+    }
+    svg {
+      background: white;
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
+      border-radius: 14px;
+      max-width: 100%;
+      height: auto;
+    }
+    .station {
+      fill: #fff;
+      stroke: #000;
+      stroke-width: 2;
+    }
+    .label {
+      font-size: 11px;
+      dominant-baseline: middle;
+      text-anchor: start;
+    }
+    .legend rect {
+      stroke: #000;
+      stroke-width: 0.4;
+    }
+  </style>
+</head>
+<body>
+  <h1>Lebanon Concept Transit Map <small>(schematic over silhouette)</small></h1>
+  <svg viewBox="0 0 1200 1600" width="90%" height="auto">
+    <!-- Lebanon silhouette as faint background -->
+    <defs>
+      <style>
+        .M1{stroke:#d62828;stroke-width:14;fill:none}
+        .M2{stroke:#1b9c3c;stroke-width:14;fill:none}
+        .M3{stroke:#1d4ed8;stroke-width:14;fill:none}
+        .coastal{stroke:#ff8c00;stroke-width:16;fill:none}
+        .LRT{stroke:#6a0dad;stroke-width:12;fill:none}
+      </style>
+    </defs>
+
+    <!-- Lebanon map (public‑domain svg) -->
+    <image href="https://upload.wikimedia.org/wikipedia/commons/5/54/Lebanon_%28orthographic_projection%29.svg"
+           x="200" y="0" width="800" height="1600" opacity="0.18" />
+
+    <!-- Coastal heavy rail – orange – runs north‑south along the western edge of silhouette -->
+    <line class="coastal" x1="330" y1="140" x2="330" y2="1420" />
+
+    <!-- Metro M1 (Red) – Corniche / urban spine, set slightly east of coast -->
+    <line class="M1" x1="420" y1="250" x2="420" y2="1350" />
+
+    <!-- Highway Light Rail (Purple) – inland median, parallels M1 but offset east -->
+    <line class="LRT" x1="510" y1="350" x2="510" y2="1250" />
+
+    <!-- Metro M2 (Green) – east‑west cross‑city axis around Beirut -->
+    <line class="M2" x1="200" y1="800" x2="800" y2="800" />
+
+    <!-- Metro M3 (Blue ring) – circular orbital around Beirut core -->
+    <circle class="M3" cx="420" cy="800" r="240" />
+
+    <!-- === Stations (subset) === -->
+    <!-- Coastal Heavy Rail -->
+    <circle class="station" cx="330" cy="160" r="8" />
+    <text class="label" x="345" y="160">Tripoli</text>
+
+    <circle class="station" cx="330" cy="260" r="8" />
+    <text class="label" x="345" y="260">Batroun</text>
+
+    <circle class="station" cx="330" cy="450" r="8" />
+    <text class="label" x="345" y="450">Jounieh Harbour</text>
+
+    <circle class="station" cx="330" cy="800" r="8" />
+    <text class="label" x="345" y="800">Beirut Port</text>
+
+    <circle class="station" cx="330" cy="1050" r="8" />
+    <text class="label" x="345" y="1050">Saida</text>
+
+    <circle class="station" cx="330" cy="1370" r="8" />
+    <text class="label" x="345" y="1370">Tyre</text>
+
+    <!-- Metro M1 stations (north to south) -->
+    <circle class="station" cx="420" cy="300" r="6" />
+    <text class="label" x="435" y="300">Jounieh CBD</text>
+
+    <circle class="station" cx="420" cy="550" r="6" />
+    <text class="label" x="435" y="550">Beirut Central</text>
+
+    <circle class="station" cx="420" cy="800" r="6" />
+    <text class="label" x="435" y="800">Martyrs Sq ⚑</text>
+
+    <circle class="station" cx="420" cy="930" r="6" />
+    <text class="label" x="435" y="930">Airport T1</text>
+
+    <circle class="station" cx="420" cy="1220" r="6" />
+    <text class="label" x="435" y="1220">Khaldeh</text>
+
+    <!-- Metro M2 stations -->
+    <circle class="station" cx="260" cy="800" r="6" />
+    <text class="label" x="270" y="800">Hamra</text>
+
+    <circle class="station" cx="420" cy="800" r="6" />
+    <circle class="station" cx="580" cy="800" r="6" />
+    <text class="label" x="590" y="800">Achrafieh</text>
+
+    <!-- Legend -->
+    <g class="legend" transform="translate(880,60)">
+      <rect x="0" y="0" width="280" height="170" fill="#fff" opacity="0.95" rx="10" ry="10" />
+      <text x="14" y="26" font-weight="bold">Key to Lines</text>
+      <line class="M1" x1="14" y1="50" x2="54" y2="50" />
+      <text x="70" y="54" font-size="12">Metro M1 (Red)</text>
+      <line class="M2" x1="14" y1="74" x2="54" y2="74" />
+      <text x="70" y="78" font-size="12">Metro M2 (Green)</text>
+      <line class="M3" x1="14" y1="98" x2="54" y2="98" />
+      <text x="70" y="102" font-size="12">Metro M3 (Blue Ring)</text>
+      <line class="LRT" x1="14" y1="122" x2="54" y2="122" />
+      <text x="70" y="126" font-size="12">Highway Light Rail</text>
+      <line class="coastal" x1="14" y1="146" x2="54" y2="146" />
+      <text x="70" y="150" font-size="12">Coastal Heavy Rail</text>
+    </g>
+  </svg>
+
+  <p style="max-width: 850px; line-height: 1.55; margin-top: 1.4rem;">
+    <strong>Orientation notes.</strong> North is at the top of the figure. The faint grey silhouette shows Lebanon
+    in its true north‑south alignment; the Mediterranean is on the <em>left</em> (west). I’ve kept the schematic
+    geometry simple—straight vertical strokes for north‑south corridors and a single east‑west line for the cross‑city M2—so it remains readable while now being roughly geo‑referenced. If you’d like a truer geographic curvature (e.g. the coastal rail hugging the shore’s slight angle), or more towns labelled, just say the word.
+  </p>
+</body>
+</html>
