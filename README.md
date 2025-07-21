@@ -21,7 +21,7 @@ The Train Scheduler is a command-line application that reads city data from CSV 
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/Randish-soft/Train_Scheduler
+git clone https://github.com/Randish-soft/Train_Scheduler.git
 cd Train_Scheduler
 ```
 
