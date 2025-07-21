@@ -77,7 +77,7 @@ This project is licensed under private licencing
 **Miguel Ibrahim E**
 
 - GitHub: [@MiguelIbrahimE](https://github.com/MiguelIbrahimE)
-- Github: @linster_the_second
+- GitHub: [@linster_the_second](https://github.com/linster_the_second)
 
 ---
 
