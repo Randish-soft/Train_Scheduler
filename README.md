@@ -9,7 +9,7 @@ The Train Scheduler is a command-line application that reads city data from CSV 
 ## 🔧 Features
 
 - **CSV Data Processing**: Reads city information from CSV files
-- Produces An approximate cost for lines
+- Produces an approximate cost for lines
 
 ## 📋 Prerequisites
 
