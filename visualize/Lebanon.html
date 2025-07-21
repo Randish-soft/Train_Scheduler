@@ -1,145 +1,488 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Lebanon Future Transit – Geo‑Reference Draft</title>
-  <style>
-    body {
-      margin: 0;
-      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background: #f2f2f2;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 2rem 0;
-    }
-    h1 {
-      margin-bottom: 1rem;
-      font-size: 1.8rem;
-      text-align: center;
-    }
-    svg {
-      background: white;
-      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
-      border-radius: 14px;
-      max-width: 100%;
-      height: auto;
-    }
-    .station {
-      fill: #fff;
-      stroke: #000;
-      stroke-width: 2;
-    }
-    .label {
-      font-size: 11px;
-      dominant-baseline: middle;
-      text-anchor: start;
-    }
-    .legend rect {
-      stroke: #000;
-      stroke-width: 0.4;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lebanon Transit Network Viewer</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+        #map {
+            height: 100vh;
+            width: 100%;
+        }
+        .load-control {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            max-width: 350px;
+        }
+        .file-input-wrapper {
+            margin: 10px 0;
+        }
+        .file-input {
+            width: 100%;
+            padding: 8px;
+            border: 2px dashed #3498db;
+            border-radius: 5px;
+            background: #f8f9fa;
+            cursor: pointer;
+        }
+        .file-input:hover {
+            background: #e9ecef;
+        }
+        .load-btn {
+            width: 100%;
+            padding: 10px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+        .load-btn:hover {
+            background: #2980b9;
+        }
+        .load-btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+        .status {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .legend {
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+            line-height: 25px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        .legend-line {
+            width: 30px;
+            height: 4px;
+            margin-right: 10px;
+            border-radius: 2px;
+        }
+        .stats {
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+            font-size: 14px;
+        }
+        .stats h4 {
+            margin: 0 0 10px 0;
+        }
+        .stat-item {
+            margin: 5px 0;
+        }
+        h3 {
+            margin: 0 0 15px 0;
+            color: #333;
+        }
+        .sample-data-btn {
+            width: 100%;
+            padding: 8px;
+            background: #27ae60;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+        .sample-data-btn:hover {
+            background: #229954;
+        }
+    </style>
 </head>
 <body>
-  <h1>Lebanon Concept Transit Map <small>(schematic over silhouette)</small></h1>
-  <svg viewBox="0 0 1200 1600" width="90%" height="auto">
-    <!-- Lebanon silhouette as faint background -->
-    <defs>
-      <style>
-        .M1{stroke:#d62828;stroke-width:14;fill:none}
-        .M2{stroke:#1b9c3c;stroke-width:14;fill:none}
-        .M3{stroke:#1d4ed8;stroke-width:14;fill:none}
-        .coastal{stroke:#ff8c00;stroke-width:16;fill:none}
-        .LRT{stroke:#6a0dad;stroke-width:12;fill:none}
-      </style>
-    </defs>
+    <div id="map"></div>
+    <script>
+        // Initialize the map
+        const map = L.map('map').setView([33.8547, 35.8623], 9);
+        
+        // Add OpenStreetMap tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
 
-    <!-- Lebanon map (public‑domain svg) -->
-    <image href="https://upload.wikimedia.org/wikipedia/commons/5/54/Lebanon_%28orthographic_projection%29.svg"
-           x="200" y="0" width="800" height="1600" opacity="0.18" />
+        // Transit line styles
+        const transitStyles = {
+            subway: {
+                color: '#e74c3c',
+                weight: 8,
+                opacity: 0.9,
+                name: 'Subway/Metro',
+                dashArray: null
+            },
+            rail: {
+                color: '#3498db',
+                weight: 6,
+                opacity: 0.9,
+                name: 'Light Rail',
+                dashArray: null
+            },
+            heavyRail: {
+                color: '#9b59b6',
+                weight: 8,
+                opacity: 0.9,
+                name: 'Heavy Rail',
+                dashArray: null
+            },
+            tram: {
+                color: '#27ae60',
+                weight: 5,
+                opacity: 0.9,
+                name: 'Tram',
+                dashArray: '10, 5'
+            },
+            bus: {
+                color: '#f39c12',
+                weight: 4,
+                opacity: 0.8,
+                name: 'Bus/BRT',
+                dashArray: '5, 5'
+            }
+        };
 
-    <!-- Coastal heavy rail – orange – runs north‑south along the western edge of silhouette -->
-    <line class="coastal" x1="330" y1="140" x2="330" y2="1420" />
+        // Layer groups for different transit types
+        const transitLayers = {
+            subway: L.layerGroup().addTo(map),
+            rail: L.layerGroup().addTo(map),
+            heavyRail: L.layerGroup().addTo(map),
+            tram: L.layerGroup().addTo(map),
+            bus: L.layerGroup().addTo(map)
+        };
 
-    <!-- Metro M1 (Red) – Corniche / urban spine, set slightly east of coast -->
-    <line class="M1" x1="420" y1="250" x2="420" y2="1350" />
+        // Statistics tracking
+        let networkStats = {
+            subway: { count: 0, length: 0 },
+            rail: { count: 0, length: 0 },
+            heavyRail: { count: 0, length: 0 },
+            tram: { count: 0, length: 0 },
+            bus: { count: 0, length: 0 }
+        };
 
-    <!-- Highway Light Rail (Purple) – inland median, parallels M1 but offset east -->
-    <line class="LRT" x1="510" y1="350" x2="510" y2="1250" />
+        // File loader control
+        const LoadControl = L.Control.extend({
+            options: {
+                position: 'topleft'
+            },
+            onAdd: function(map) {
+                const container = L.DomUtil.create('div', 'load-control');
+                
+                container.innerHTML = `
+                    <h3>Load Transit Network</h3>
+                    <div class="file-input-wrapper">
+                        <input type="file" id="file-input" class="file-input" accept=".json">
+                    </div>
+                    <button id="load-btn" class="load-btn" disabled>Load Network</button>
+                    <button id="sample-btn" class="sample-data-btn">Load Sample Network</button>
+                    <div id="status"></div>
+                `;
+                
+                L.DomEvent.disableClickPropagation(container);
+                L.DomEvent.disableScrollPropagation(container);
+                
+                return container;
+            }
+        });
 
-    <!-- Metro M2 (Green) – east‑west cross‑city axis around Beirut -->
-    <line class="M2" x1="200" y1="800" x2="800" y2="800" />
+        // Legend control
+        const LegendControl = L.Control.extend({
+            options: {
+                position: 'bottomright'
+            },
+            onAdd: function(map) {
+                const container = L.DomUtil.create('div', 'legend');
+                
+                container.innerHTML = `
+                    <h4 style="margin: 0 0 10px 0;">Transit Lines</h4>
+                    ${Object.entries(transitStyles).map(([key, style]) => `
+                        <div class="legend-item">
+                            <div class="legend-line" style="background: ${style.color}; ${style.dashArray ? `background-image: repeating-linear-gradient(90deg, ${style.color}, ${style.color} 5px, white 5px, white 10px);` : ''}"></div>
+                            <span>${style.name}</span>
+                        </div>
+                    `).join('')}
+                `;
+                
+                return container;
+            }
+        });
 
-    <!-- Metro M3 (Blue ring) – circular orbital around Beirut core -->
-    <circle class="M3" cx="420" cy="800" r="240" />
+        // Statistics control
+        const StatsControl = L.Control.extend({
+            options: {
+                position: 'topright'
+            },
+            onAdd: function(map) {
+                const container = L.DomUtil.create('div', 'stats');
+                container.id = 'stats-panel';
+                container.innerHTML = '<h4>Network Statistics</h4><div id="stats-content">No data loaded</div>';
+                return container;
+            }
+        });
 
-    <!-- === Stations (subset) === -->
-    <!-- Coastal Heavy Rail -->
-    <circle class="station" cx="330" cy="160" r="8" />
-    <text class="label" x="345" y="160">Tripoli</text>
+        // Add controls
+        map.addControl(new LoadControl());
+        map.addControl(new LegendControl());
+        map.addControl(new StatsControl());
 
-    <circle class="station" cx="330" cy="260" r="8" />
-    <text class="label" x="345" y="260">Batroun</text>
+        // File handling
+        let selectedFile = null;
+        
+        document.getElementById('file-input').addEventListener('change', function(e) {
+            selectedFile = e.target.files[0];
+            document.getElementById('load-btn').disabled = !selectedFile;
+        });
 
-    <circle class="station" cx="330" cy="450" r="8" />
-    <text class="label" x="345" y="450">Jounieh Harbour</text>
+        // Load button handler
+        document.getElementById('load-btn').addEventListener('click', function() {
+            if (!selectedFile) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    loadTransitNetwork(data);
+                    showStatus('Network loaded successfully!', 'success');
+                } catch (error) {
+                    showStatus('Error loading file: ' + error.message, 'error');
+                }
+            };
+            reader.readAsText(selectedFile);
+        });
 
-    <circle class="station" cx="330" cy="800" r="8" />
-    <text class="label" x="345" y="800">Beirut Port</text>
+        // Sample data
+        const sampleNetwork = {
+            transitLines: {
+                subway: [
+                    {
+                        coordinates: [
+                            [33.9389, 35.5978],
+                            [33.9056, 35.5789],
+                            [33.8811, 35.5511],
+                            [33.8789, 35.5222],
+                            [33.8959, 35.5018],
+                            [33.8959, 35.4789],
+                            [33.8822, 35.4656],
+                            [33.8208, 35.4883]
+                        ],
+                        properties: { name: "Coastal Metro Line" }
+                    }
+                ],
+                rail: [
+                    {
+                        coordinates: [
+                            [34.4367, 35.8497],
+                            [34.2556, 35.6589],
+                            [34.1211, 35.6478],
+                            [33.9811, 35.6189]
+                        ],
+                        properties: { name: "North Coastal Light Rail" }
+                    }
+                ],
+                heavyRail: [
+                    {
+                        coordinates: [
+                            [33.8339, 35.5442],
+                            [33.7111, 35.5989],
+                            [33.8178, 35.8567],
+                            [33.8467, 35.9022],
+                            [34.0067, 36.2181]
+                        ],
+                        properties: { name: "Bekaa Express" }
+                    }
+                ],
+                tram: [
+                    {
+                        coordinates: [
+                            [33.8778, 35.4944],
+                            [33.8844, 35.4722],
+                            [33.8959, 35.4789],
+                            [33.9011, 35.4811],
+                            [33.8959, 35.5018]
+                        ],
+                        properties: { name: "Beirut Central Tram" }
+                    }
+                ],
+                bus: [
+                    {
+                        coordinates: [
+                            [33.8959, 35.5018],
+                            [33.8778, 35.4944],
+                            [33.8208, 35.4883]
+                        ],
+                        properties: { name: "Airport Express BRT" }
+                    }
+                ]
+            }
+        };
 
-    <circle class="station" cx="330" cy="1050" r="8" />
-    <text class="label" x="345" y="1050">Saida</text>
+        // Load sample network button
+        document.getElementById('sample-btn').addEventListener('click', function() {
+            loadTransitNetwork(sampleNetwork);
+            showStatus('Sample network loaded!', 'success');
+        });
 
-    <circle class="station" cx="330" cy="1370" r="8" />
-    <text class="label" x="345" y="1370">Tyre</text>
+        // Function to load transit network
+        function loadTransitNetwork(data) {
+            // Clear existing layers
+            Object.values(transitLayers).forEach(layer => layer.clearLayers());
+            
+            // Reset stats
+            Object.keys(networkStats).forEach(type => {
+                networkStats[type] = { count: 0, length: 0 };
+            });
+            
+            // Load new data
+            if (data.transitLines) {
+                Object.entries(data.transitLines).forEach(([type, lines]) => {
+                    if (transitLayers[type] && lines) {
+                        lines.forEach(lineData => {
+                            const polyline = L.polyline(lineData.coordinates, transitStyles[type]);
+                            
+                            // Calculate length
+                            const length = calculatePolylineLength(lineData.coordinates);
+                            networkStats[type].count++;
+                            networkStats[type].length += length;
+                            
+                            // Add popup
+                            const name = lineData.properties?.name || `${transitStyles[type].name} Line`;
+                            polyline.bindPopup(`
+                                <div style="font-size: 14px;">
+                                    <strong>${name}</strong><br>
+                                    Type: ${transitStyles[type].name}<br>
+                                    Length: ${length.toFixed(2)} km
+                                </div>
+                            `);
+                            
+                            transitLayers[type].addLayer(polyline);
+                        });
+                    }
+                });
+                
+                // Update statistics display
+                updateStats();
+                
+                // Fit map to show all lines
+                const allBounds = [];
+                Object.values(transitLayers).forEach(layer => {
+                    layer.eachLayer(line => {
+                        allBounds.push(...line.getLatLngs());
+                    });
+                });
+                
+                if (allBounds.length > 0) {
+                    map.fitBounds(L.latLngBounds(allBounds), { padding: [50, 50] });
+                }
+            }
+        }
 
-    <!-- Metro M1 stations (north to south) -->
-    <circle class="station" cx="420" cy="300" r="6" />
-    <text class="label" x="435" y="300">Jounieh CBD</text>
+        // Calculate polyline length in km
+        function calculatePolylineLength(coordinates) {
+            let length = 0;
+            for (let i = 0; i < coordinates.length - 1; i++) {
+                const point1 = L.latLng(coordinates[i]);
+                const point2 = L.latLng(coordinates[i + 1]);
+                length += point1.distanceTo(point2) / 1000; // Convert to km
+            }
+            return length;
+        }
 
-    <circle class="station" cx="420" cy="550" r="6" />
-    <text class="label" x="435" y="550">Beirut Central</text>
+        // Update statistics display
+        function updateStats() {
+            const statsContent = document.getElementById('stats-content');
+            let totalLines = 0;
+            let totalLength = 0;
+            
+            let html = '';
+            Object.entries(networkStats).forEach(([type, stats]) => {
+                if (stats.count > 0) {
+                    html += `
+                        <div class="stat-item">
+                            <strong>${transitStyles[type].name}:</strong><br>
+                            ${stats.count} lines, ${stats.length.toFixed(1)} km
+                        </div>
+                    `;
+                    totalLines += stats.count;
+                    totalLength += stats.length;
+                }
+            });
+            
+            if (totalLines > 0) {
+                html = `
+                    <div class="stat-item" style="border-bottom: 1px solid #ddd; padding-bottom: 5px; margin-bottom: 10px;">
+                        <strong>Total Network:</strong><br>
+                        ${totalLines} lines, ${totalLength.toFixed(1)} km
+                    </div>
+                ` + html;
+            } else {
+                html = 'No data loaded';
+            }
+            
+            statsContent.innerHTML = html;
+        }
 
-    <circle class="station" cx="420" cy="800" r="6" />
-    <text class="label" x="435" y="800">Martyrs Sq ⚑</text>
+        // Show status message
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = `status ${type}`;
+            statusDiv.textContent = message;
+            statusDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 3000);
+        }
 
-    <circle class="station" cx="420" cy="930" r="6" />
-    <text class="label" x="435" y="930">Airport T1</text>
+        // Add layer control
+        const overlays = {
+            "Subway/Metro": transitLayers.subway,
+            "Light Rail": transitLayers.rail,
+            "Heavy Rail": transitLayers.heavyRail,
+            "Tram": transitLayers.tram,
+            "Bus/BRT": transitLayers.bus
+        };
 
-    <circle class="station" cx="420" cy="1220" r="6" />
-    <text class="label" x="435" y="1220">Khaldeh</text>
+        L.control.layers(null, overlays, {
+            position: 'bottomleft',
+            collapsed: false
+        }).addTo(map);
 
-    <!-- Metro M2 stations -->
-    <circle class="station" cx="260" cy="800" r="6" />
-    <text class="label" x="270" y="800">Hamra</text>
-
-    <circle class="station" cx="420" cy="800" r="6" />
-    <circle class="station" cx="580" cy="800" r="6" />
-    <text class="label" x="590" y="800">Achrafieh</text>
-
-    <!-- Legend -->
-    <g class="legend" transform="translate(880,60)">
-      <rect x="0" y="0" width="280" height="170" fill="#fff" opacity="0.95" rx="10" ry="10" />
-      <text x="14" y="26" font-weight="bold">Key to Lines</text>
-      <line class="M1" x1="14" y1="50" x2="54" y2="50" />
-      <text x="70" y="54" font-size="12">Metro M1 (Red)</text>
-      <line class="M2" x1="14" y1="74" x2="54" y2="74" />
-      <text x="70" y="78" font-size="12">Metro M2 (Green)</text>
-      <line class="M3" x1="14" y1="98" x2="54" y2="98" />
-      <text x="70" y="102" font-size="12">Metro M3 (Blue Ring)</text>
-      <line class="LRT" x1="14" y1="122" x2="54" y2="122" />
-      <text x="70" y="126" font-size="12">Highway Light Rail</text>
-      <line class="coastal" x1="14" y1="146" x2="54" y2="146" />
-      <text x="70" y="150" font-size="12">Coastal Heavy Rail</text>
-    </g>
-  </svg>
-
-  <p style="max-width: 850px; line-height: 1.55; margin-top: 1.4rem;">
-    <strong>Orientation notes.</strong> North is at the top of the figure. The faint grey silhouette shows Lebanon
-    in its true north‑south alignment; the Mediterranean is on the <em>left</em> (west). I’ve kept the schematic
-    geometry simple—straight vertical strokes for north‑south corridors and a single east‑west line for the cross‑city M2—so it remains readable while now being roughly geo‑referenced. If you’d like a truer geographic curvature (e.g. the coastal rail hugging the shore’s slight angle), or more towns labelled, just say the word.
-  </p>
+        // Add scale
+        L.control.scale({
+            position: 'bottomleft',
+            metric: true,
+            imperial: false
+        }).addTo(map);
+    </script>
 </body>
 </html>
