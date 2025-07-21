@@ -25,7 +25,7 @@ git clone https://github.com/Randish-soft/Train_Scheduler
 cd Train_Scheduler
 ```
 
-2. Install Poetry Dependencies
+2. Install Poetry Dependencies:
 
 ```bash
 poetry install
