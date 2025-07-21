@@ -368,7 +368,7 @@ class RailwayLearner:
         analysis['categories'] = categories
         analysis['operators'] = operators
         analysis['platform_distribution'] = {
-            'mean': np.mean(platform_counts),
+            'mean': np.mean([int(x) if x.isdigit() else 0 for x in platform_counts]),
             'median': np.median(platform_counts),
             'max': np.max(platform_counts),
             'distribution': dict(zip(*np.unique(platform_counts, return_counts=True)))

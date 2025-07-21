@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lebanon Transit Network Viewer</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+        #map {
+            height: 100vh;
+            width: 100%;
+        }
+        .load-control {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            max-width: 350px;
+        }
+        .file-input-wrapper {
+            margin: 10px 0;
+        }
+        .file-input {
+            width: 100%;
+            padding: 8px;
+            border: 2px dashed #3498db;
+            border-radius: 5px;
+            background: #f8f9fa;
+            cursor: pointer;
+        }
+        .file-input:hover {
+            background: #e9ecef;
+        }
+        .load-btn {
+            width: 100%;
+            padding: 10px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+        .load-btn:hover {
+            background: #2980b9;
+        }
+        .load-btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+        .status {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .legend {
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+            line-height: 25px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        .legend-line {
+            width: 30px;
+            height: 4px;
+            margin-right: 10px;
+            border-radius: 2px;
+        }
+        .stats {
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+            font-size: 14px;
+        }
+        .stats h4 {
+            margin: 0 0 10px 0;
+        }
+        .stat-item {
+            margin: 5px 0;
+        }
+        h3 {
+            margin: 0 0 15px 0;
+            color: #333;
+        }
+        .sample-data-btn {
+            width: 100%;
+            padding: 8px;
+            background: #27ae60;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+        .sample-data-btn:hover {
+            background: #229954;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <script>
+        // Initialize the map
+        const map = L.map('map').setView([33.8547, 35.8623], 9);
+        
+        // Add OpenStreetMap tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        // Transit line styles
+        const transitStyles = {
+            subway: {
+                color: '#e74c3c',
+                weight: 8,
+                opacity: 0.9,
+                name: 'Subway/Metro',
+                dashArray: null
+            },
+            rail: {
+                color: '#3498db',
+                weight: 6,
+                opacity: 0.9,
+                name: 'Light Rail',
+                dashArray: null
+            },
+            heavyRail: {
+                color: '#9b59b6',
+                weight: 8,
+                opacity: 0.9,
+                name: 'Heavy Rail',
+                dashArray: null
+            },
+            tram: {
+                color: '#27ae60',
+                weight: 5,
+                opacity: 0.9,
+                name: 'Tram',
+                dashArray: '10, 5'
+            },
+            bus: {
+                color: '#f39c12',
+                weight: 4,
+                opacity: 0.8,
+                name: 'Bus/BRT',
+                dashArray: '5, 5'
+            }
+        };
+
+        // Layer groups for different transit types
+        const transitLayers = {
+            subway: L.layerGroup().addTo(map),
+            rail: L.layerGroup().addTo(map),
+            heavyRail: L.layerGroup().addTo(map),
+            tram: L.layerGroup().addTo(map),
+            bus: L.layerGroup().addTo(map)
+        };
+
+        // Statistics tracking
+        let networkStats = {
+            subway: { count: 0, length: 0 },
+            rail: { count: 0, length: 0 },
+            heavyRail: { count: 0, length: 0 },
+            tram: { count: 0, length: 0 },
+            bus: { count: 0, length: 0 }
+        };
+
+        // File loader control
+        const LoadControl = L.Control.extend({
+            options: {
+                position: 'topleft'
+            },
+            onAdd: function(map) {
+                const container = L.DomUtil.create('div', 'load-control');
+                
+                container.innerHTML = `
+                    <h3>Load Transit Network</h3>
+                    <div class="file-input-wrapper">
+                        <input type="file" id="file-input" class="file-input" accept=".json">
+                    </div>
+                    <button id="load-btn" class="load-btn" disabled>Load Network</button>
+                    <button id="sample-btn" class="sample-data-btn">Load Sample Network</button>
+                    <div id="status"></div>
+                `;
+                
+                L.DomEvent.disableClickPropagation(container);
+                L.DomEvent.disableScrollPropagation(container);
+                
+                return container;
+            }
+        });
+
+        // Legend control
+        const LegendControl = L.Control.extend({
+            options: {
+                position: 'bottomright'
+            },
+            onAdd: function(map) {
+                const container = L.DomUtil.create('div', 'legend');
+                
+                container.innerHTML = `
+                    <h4 style="margin: 0 0 10px 0;">Transit Lines</h4>
+                    ${Object.entries(transitStyles).map(([key, style]) => `
+                        <div class="legend-item">
+                            <div class="legend-line" style="background: ${style.color}; ${style.dashArray ? `background-image: repeating-linear-gradient(90deg, ${style.color}, ${style.color} 5px, white 5px, white 10px);` : ''}"></div>
+                            <span>${style.name}</span>
+                        </div>
+                    `).join('')}
+                `;
+                
+                return container;
+            }
+        });
+
+        // Statistics control
+        const StatsControl = L.Control.extend({
+            options: {
+                position: 'topright'
+            },
+            onAdd: function(map) {
+                const container = L.DomUtil.create('div', 'stats');
+                container.id = 'stats-panel';
+                container.innerHTML = '<h4>Network Statistics</h4><div id="stats-content">No data loaded</div>';
+                return container;
+            }
+        });
+
+        // Add controls
+        map.addControl(new LoadControl());
+        map.addControl(new LegendControl());
+        map.addControl(new StatsControl());
+
+        // File handling
+        let selectedFile = null;
+        
+        document.getElementById('file-input').addEventListener('change', function(e) {
+            selectedFile = e.target.files[0];
+            document.getElementById('load-btn').disabled = !selectedFile;
+        });
+
+        // Load button handler
+        document.getElementById('load-btn').addEventListener('click', function() {
+            if (!selectedFile) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    loadTransitNetwork(data);
+                    showStatus('Network loaded successfully!', 'success');
+                } catch (error) {
+                    showStatus('Error loading file: ' + error.message, 'error');
+                }
+            };
+            reader.readAsText(selectedFile);
+        });
+
+        // Sample data
+        const sampleNetwork = {
+            transitLines: {
+                subway: [
+                    {
+                        coordinates: [
+                            [33.9389, 35.5978],
+                            [33.9056, 35.5789],
+                            [33.8811, 35.5511],
+                            [33.8789, 35.5222],
+                            [33.8959, 35.5018],
+                            [33.8959, 35.4789],
+                            [33.8822, 35.4656],
+                            [33.8208, 35.4883]
+                        ],
+                        properties: { name: "Coastal Metro Line" }
+                    }
+                ],
+                rail: [
+                    {
+                        coordinates: [
+                            [34.4367, 35.8497],
+                            [34.2556, 35.6589],
+                            [34.1211, 35.6478],
+                            [33.9811, 35.6189]
+                        ],
+                        properties: { name: "North Coastal Light Rail" }
+                    }
+                ],
+                heavyRail: [
+                    {
+                        coordinates: [
+                            [33.8339, 35.5442],
+                            [33.7111, 35.5989],
+                            [33.8178, 35.8567],
+                            [33.8467, 35.9022],
+                            [34.0067, 36.2181]
+                        ],
+                        properties: { name: "Bekaa Express" }
+                    }
+                ],
+                tram: [
+                    {
+                        coordinates: [
+                            [33.8778, 35.4944],
+                            [33.8844, 35.4722],
+                            [33.8959, 35.4789],
+                            [33.9011, 35.4811],
+                            [33.8959, 35.5018]
+                        ],
+                        properties: { name: "Beirut Central Tram" }
+                    }
+                ],
+                bus: [
+                    {
+                        coordinates: [
+                            [33.8959, 35.5018],
+                            [33.8778, 35.4944],
+                            [33.8208, 35.4883]
+                        ],
+                        properties: { name: "Airport Express BRT" }
+                    }
+                ]
+            }
+        };
+
+        // Load sample network button
+        document.getElementById('sample-btn').addEventListener('click', function() {
+            loadTransitNetwork(sampleNetwork);
+            showStatus('Sample network loaded!', 'success');
+        });
+
+        // Function to load transit network
+        function loadTransitNetwork(data) {
+            // Clear existing layers
+            Object.values(transitLayers).forEach(layer => layer.clearLayers());
+            
+            // Reset stats
+            Object.keys(networkStats).forEach(type => {
+                networkStats[type] = { count: 0, length: 0 };
+            });
+            
+            // Load new data
+            if (data.transitLines) {
+                Object.entries(data.transitLines).forEach(([type, lines]) => {
+                    if (transitLayers[type] && lines) {
+                        lines.forEach(lineData => {
+                            const polyline = L.polyline(lineData.coordinates, transitStyles[type]);
+                            
+                            // Calculate length
+                            const length = calculatePolylineLength(lineData.coordinates);
+                            networkStats[type].count++;
+                            networkStats[type].length += length;
+                            
+                            // Add popup
+                            const name = lineData.properties?.name || `${transitStyles[type].name} Line`;
+                            polyline.bindPopup(`
+                                <div style="font-size: 14px;">
+                                    <strong>${name}</strong><br>
+                                    Type: ${transitStyles[type].name}<br>
+                                    Length: ${length.toFixed(2)} km
+                                </div>
+                            `);
+                            
+                            transitLayers[type].addLayer(polyline);
+                        });
+                    }
+                });
+                
+                // Update statistics display
+                updateStats();
+                
+                // Fit map to show all lines
+                const allBounds = [];
+                Object.values(transitLayers).forEach(layer => {
+                    layer.eachLayer(line => {
+                        allBounds.push(...line.getLatLngs());
+                    });
+                });
+                
+                if (allBounds.length > 0) {
+                    map.fitBounds(L.latLngBounds(allBounds), { padding: [50, 50] });
+                }
+            }
+        }
+
+        // Calculate polyline length in km
+        function calculatePolylineLength(coordinates) {
+            let length = 0;
+            for (let i = 0; i < coordinates.length - 1; i++) {
+                const point1 = L.latLng(coordinates[i]);
+                const point2 = L.latLng(coordinates[i + 1]);
+                length += point1.distanceTo(point2) / 1000; // Convert to km
+            }
+            return length;
+        }
+
+        // Update statistics display
+        function updateStats() {
+            const statsContent = document.getElementById('stats-content');
+            let totalLines = 0;
+            let totalLength = 0;
+            
+            let html = '';
+            Object.entries(networkStats).forEach(([type, stats]) => {
+                if (stats.count > 0) {
+                    html += `
+                        <div class="stat-item">
+                            <strong>${transitStyles[type].name}:</strong><br>
+                            ${stats.count} lines, ${stats.length.toFixed(1)} km
+                        </div>
+                    `;
+                    totalLines += stats.count;
+                    totalLength += stats.length;
+                }
+            });
+            
+            if (totalLines > 0) {
+                html = `
+                    <div class="stat-item" style="border-bottom: 1px solid #ddd; padding-bottom: 5px; margin-bottom: 10px;">
+                        <strong>Total Network:</strong><br>
+                        ${totalLines} lines, ${totalLength.toFixed(1)} km
+                    </div>
+                ` + html;
+            } else {
+                html = 'No data loaded';
+            }
+            
+            statsContent.innerHTML = html;
+        }
+
+        // Show status message
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = `status ${type}`;
+            statusDiv.textContent = message;
+            statusDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 3000);
+        }
+
+        // Add layer control
+        const overlays = {
+            "Subway/Metro": transitLayers.subway,
+            "Light Rail": transitLayers.rail,
+            "Heavy Rail": transitLayers.heavyRail,
+            "Tram": transitLayers.tram,
+            "Bus/BRT": transitLayers.bus
+        };
+
+        L.control.layers(null, overlays, {
+            position: 'bottomleft',
+            collapsed: false
+        }).addTo(map);
+
+        // Add scale
+        L.control.scale({
+            position: 'bottomleft',
+            metric: true,
+            imperial: false
+        }).addTo(map);
+    </script>
+</body>
+</html>
