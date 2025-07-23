@@ -211,6 +211,7 @@ class StationPatternAnalyzer:
         
         self.learned_patterns['spacing'] = spacing_patterns
     
+    
     def optimize_station_placement(self, 
                                  route_points: List[Tuple[float, float]],
                                  population_data: List[Dict] = None,

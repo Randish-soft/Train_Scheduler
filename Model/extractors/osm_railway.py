@@ -57,35 +57,107 @@ class OSMRailwayExtractor:
         
         return stations
     
-    def extract_railway_tracks(self, country: str) -> List[Dict]:
-        """Extract railway tracks with technical details"""
-        query = f"""
-        [out:json][timeout:300];
-        area["ISO3166-1"="{country.upper()}"][admin_level=2];
-        way["railway"="rail"]["usage"~"main|branch"](area);
-        out geom;
-        """
-        
-        response = requests.post(self.overpass_url, data={'data': query})
-        data = response.json()
-        
-        tracks = []
-        for element in data['elements']:
-            if element['type'] == 'way':
-                track = {
-                    'id': element['id'],
-                    'geometry': element['geometry'],
-                    'maxspeed': element.get('tags', {}).get('maxspeed', ''),
-                    'electrified': element.get('tags', {}).get('electrified', 'no'),
-                    'gauge': element.get('tags', {}).get('gauge', '1435'),
-                    'usage': element.get('tags', {}).get('usage', 'main'),
-                    'service': element.get('tags', {}).get('service', 'passenger')
-                }
-                tracks.append(track)
-                
-        return tracks
+    # In your OSM railway extractor, use this implementation:
 
-
+def extract_railway_tracks(self, country: str) -> List[Dict]:
+    """Extract railway tracks with geometry from OpenStreetMap"""
+    bounds = get_country_bounds(country)
+    
+    # Query that gets ways with their node references and coordinates
+    query = f"""
+    [out:json][timeout:300];
+    (
+        way["railway"="rail"]({bounds.south},{bounds.west},{bounds.north},{bounds.east});
+        way["railway"="narrow_gauge"]({bounds.south},{bounds.west},{bounds.north},{bounds.east});
+        way["railway"="light_rail"]({bounds.south},{bounds.west},{bounds.north},{bounds.east});
+        way["railway"="subway"]({bounds.south},{bounds.west},{bounds.north},{bounds.east});
+        way["railway"="tram"]({bounds.south},{bounds.west},{bounds.north},{bounds.east});
+    );
+    out body;
+    >;
+    out skel qt;
+    """
+    
+    # Execute query
+    response = self._execute_overpass_query(query)
+    
+    if not response or 'elements' not in response:
+        return []
+    
+    # Process results
+    tracks = []
+    ways = {}
+    nodes = {}
+    
+    # First pass: collect all nodes and ways
+    for element in response.get('elements', []):
+        if element['type'] == 'node':
+            nodes[element['id']] = {
+                'lat': element['lat'],
+                'lon': element['lon']
+            }
+        elif element['type'] == 'way':
+            ways[element['id']] = element
+    
+    # Second pass: build track data with geometry
+    for way_id, way in ways.items():
+        tags = way.get('tags', {})
+        
+        # Skip non-rail types
+        railway_type = tags.get('railway', '')
+        if railway_type not in ['rail', 'narrow_gauge', 'light_rail', 'subway', 'tram']:
+            continue
+        
+        # Get node references
+        way_nodes = way.get('nodes', [])
+        if len(way_nodes) < 2:
+            continue  # Skip ways with insufficient nodes
+        
+        # Build geometry from node coordinates
+        geometry = []
+        valid_nodes = []
+        
+        for node_id in way_nodes:
+            if node_id in nodes:
+                node = nodes[node_id]
+                geometry.append([node['lon'], node['lat']])
+                valid_nodes.append(node_id)
+        
+        # Only add tracks with valid geometry (at least 2 points)
+        if len(geometry) >= 2:
+            # Parse track attributes
+            maxspeed = tags.get('maxspeed', '100')
+            if isinstance(maxspeed, str):
+                # Extract numeric speed
+                import re
+                match = re.search(r'\d+', maxspeed)
+                maxspeed = match.group() if match else '100'
+            
+            # Determine electrification
+            electrified_value = tags.get('electrified', 'no')
+            electrified = electrified_value in ['yes', 'contact_line', 'rail', '3rd_rail', '4th_rail']
+            
+            track = {
+                'id': str(way_id),
+                'nodes': valid_nodes,  # List of node IDs
+                'geometry': geometry,  # List of [lon, lat] coordinates
+                'railway_type': railway_type,
+                'maxspeed': maxspeed,
+                'electrified': electrified,
+                'usage': tags.get('usage', 'main'),
+                'gauge': tags.get('gauge', '1435'),
+                'name': tags.get('name', ''),
+                'operator': tags.get('operator', ''),
+                'service': tags.get('service', ''),  # freight, passenger, etc.
+                'tracks': tags.get('tracks', '1'),  # number of tracks
+                'tunnel': tags.get('tunnel', 'no') == 'yes',
+                'bridge': tags.get('bridge', 'no') == 'yes',
+                'ref': tags.get('ref', '')  # line reference
+            }
+            tracks.append(track)
+    
+    self.logger.info(f"Extracted {len(tracks)} tracks with geometry")
+    return tracks
 # File: Model/extractors/terrain_analysis.py
 import numpy as np
 import requests
