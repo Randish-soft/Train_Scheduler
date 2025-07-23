@@ -2,6 +2,9 @@
 
 A Python-based train scheduling application that processes city data to generate optimized train schedules, types, rail manouvering, etc.
 
+# Warning
+Resource Hogger, it will bjork your resources, so use LEARN function carefully!!!
+
 ## 🚂 Overview
 
 The Train Scheduler is a command-line application that reads city data from CSV files and generates train conenctions and approximate cost of these connections. It’s designed to help with route planning and optimization for train services between cities of countries that do not have railway(s) or for countries that have existing networks but want to expand their network or optimize them
