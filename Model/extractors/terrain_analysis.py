@@ -1,312 +1,197 @@
-# File: model/extractors/terrain_analysis.py
+# File: Model/extractors/terrain_analysis.py
 import numpy as np
 import requests
-from typing import Tuple, List, Dict, Optional
-import json
-from io import BytesIO
+from typing import Tuple, List, Dict
 import math
+import logging
 
 class TerrainAnalyzer:
     def __init__(self):
-        self.open_elevation_url = "https://api.open-elevation.com/api/v1/lookup"
-        self.cache = {}
+        self.srtm_base_url = "https://cloud.sdsc.edu/v1/AUTH_opentopography/Raster/SRTM_GL1"
+        self.elevation_api_url = "https://api.open-elevation.com/api/v1/lookup"
+        self.logger = logging.getLogger(__name__)
         
-    def get_elevation_profile(self, points: List[Tuple[float, float]], 
-                            sample_rate: int = 100) -> List[Dict]:
-        """Get elevation profile for a route with given points"""
-        if len(points) < 2:
-            return []
+    def get_elevation_data(self, bbox: Tuple[float, float, float, float]) -> np.ndarray:
+        """Get elevation data for bounding box (west, south, east, north)"""
+        west, south, east, north = bbox
         
-        # Interpolate points along the route
-        interpolated_points = self._interpolate_route(points, sample_rate)
+        # Simple elevation model - in production you'd use proper SRTM tiles
+        lat_points = np.linspace(south, north, 100)
+        lon_points = np.linspace(west, east, 100)
         
-        # Get elevations in batches (API limit)
-        batch_size = 100
-        elevation_profile = []
+        # Mock elevation data with realistic patterns
+        elevation = np.zeros((100, 100))
+        for i, lat in enumerate(lat_points):
+            for j, lon in enumerate(lon_points):
+                # Simulate elevation based on coordinate patterns
+                elevation[i, j] = abs(lat * 10) + abs(lon * 5) + np.random.normal(0, 50)
         
-        for i in range(0, len(interpolated_points), batch_size):
-            batch = interpolated_points[i:i + batch_size]
-            elevations = self._get_batch_elevations(batch)
-            elevation_profile.extend(elevations)
-        
-        return elevation_profile
+        return elevation
     
-    def _interpolate_route(self, points: List[Tuple[float, float]], 
-                          sample_rate: int) -> List[Tuple[float, float]]:
-        """Interpolate points along route for elevation sampling"""
-        if len(points) < 2:
-            return points
+    def get_elevation_profile(self, route_points: List[Tuple[float, float]], sample_rate: int = 20) -> List[Dict]:
+        """Get elevation profile along a route"""
+        elevations = []
         
-        interpolated = [points[0]]
-        
-        for i in range(len(points) - 1):
-            start_lat, start_lon = points[i]
-            end_lat, end_lon = points[i + 1]
+        # For each segment between points
+        for i in range(len(route_points) - 1):
+            start_lat, start_lon = route_points[i]
+            end_lat, end_lon = route_points[i + 1]
             
-            # Calculate distance between points
-            distance = self._haversine_distance(start_lat, start_lon, end_lat, end_lon)
-            
-            # Number of interpolated points based on distance and sample rate
-            num_points = max(1, int(distance * sample_rate / 10))  # 10km = sample_rate points
-            
-            for j in range(1, num_points + 1):
-                t = j / num_points
-                lat = start_lat + t * (end_lat - start_lat)
-                lon = start_lon + t * (end_lon - start_lon)
-                interpolated.append((lat, lon))
-        
-        return interpolated
-    
-    def _get_batch_elevations(self, points: List[Tuple[float, float]]) -> List[Dict]:
-        """Get elevations for a batch of points"""
-        locations = [{"latitude": lat, "longitude": lon} for lat, lon in points]
-        
-        try:
-            response = requests.post(
-                self.open_elevation_url,
-                json={"locations": locations},
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                results = []
+            # Interpolate points along the segment
+            for j in range(sample_rate):
+                ratio = j / sample_rate
+                lat = start_lat + (end_lat - start_lat) * ratio
+                lon = start_lon + (end_lon - start_lon) * ratio
                 
-                for i, result in enumerate(data.get('results', [])):
-                    lat, lon = points[i]
-                    results.append({
-                        'lat': lat,
-                        'lon': lon,
-                        'elevation': result.get('elevation', 0),
-                        'distance_km': 0 if i == 0 else self._calculate_cumulative_distance(points[:i+1])
-                    })
+                # Get elevation for this point
+                elevation = self._get_point_elevation(lat, lon)
                 
-                return results
-            
-        except Exception as e:
-            print(f"Elevation API error: {e}")
-            
-        # Fallback: mock elevation data
-        return self._generate_mock_elevation(points)
-    
-    def _generate_mock_elevation(self, points: List[Tuple[float, float]]) -> List[Dict]:
-        """Generate realistic mock elevation data"""
-        results = []
-        cumulative_distance = 0
+                elevations.append({
+                    'lat': lat,
+                    'lon': lon,
+                    'elevation': elevation,
+                    'distance_km': self._calculate_distance(route_points[0], (lat, lon))
+                })
         
-        for i, (lat, lon) in enumerate(points):
-            # Simple elevation model based on latitude (mountains in central Europe)
-            base_elevation = max(0, (abs(lat - 47) * 100) + (abs(lon - 8) * 50))
-            
-            # Add some realistic variation
-            noise = np.random.normal(0, 20)
-            elevation = max(0, base_elevation + noise)
-            
-            if i > 0:
-                prev_lat, prev_lon = points[i-1]
-                cumulative_distance += self._haversine_distance(prev_lat, prev_lon, lat, lon)
-            
-            results.append({
+        # Add final point
+        if route_points:
+            lat, lon = route_points[-1]
+            elevation = self._get_point_elevation(lat, lon)
+            elevations.append({
                 'lat': lat,
                 'lon': lon,
                 'elevation': elevation,
-                'distance_km': cumulative_distance
+                'distance_km': self._calculate_distance(route_points[0], route_points[-1])
             })
         
-        return results
+        return elevations
     
-    def _calculate_cumulative_distance(self, points: List[Tuple[float, float]]) -> float:
-        """Calculate cumulative distance along points"""
-        total_distance = 0
-        for i in range(1, len(points)):
-            prev_lat, prev_lon = points[i-1]
-            lat, lon = points[i]
-            total_distance += self._haversine_distance(prev_lat, prev_lon, lat, lon)
-        return total_distance
+    def _get_point_elevation(self, lat: float, lon: float) -> float:
+        """Get elevation for a single point using Open Elevation API"""
+        try:
+            # Try to get real elevation data
+            locations = {"locations": [{"latitude": lat, "longitude": lon}]}
+            response = requests.post(self.elevation_api_url, json=locations, timeout=5)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if 'results' in data and len(data['results']) > 0:
+                    return data['results'][0].get('elevation', 100)
+        except Exception as e:
+            self.logger.debug(f"Failed to get elevation data: {e}")
+        
+        # Fallback to simulated elevation
+        # Create realistic elevation based on latitude (higher towards poles, mountains)
+        base_elevation = 100 + abs(lat - 50) * 20  # Base elevation increases away from 50°
+        variation = np.sin(lon * 0.5) * 50 + np.sin(lat * 0.3) * 30  # Add variation
+        return max(0, base_elevation + variation + np.random.normal(0, 10))
     
     def calculate_route_metrics(self, elevation_profile: List[Dict]) -> Dict:
-        """Calculate route terrain metrics"""
+        """Calculate route metrics from elevation profile"""
         if len(elevation_profile) < 2:
-            return {}
+            return {
+                'total_distance_km': 0,
+                'total_elevation_gain': 0,
+                'total_elevation_loss': 0,
+                'max_elevation': 0,
+                'min_elevation': 0,
+                'avg_gradient': 0,
+                'max_gradient': 0
+            }
         
+        # Extract elevations and distances
         elevations = [p['elevation'] for p in elevation_profile]
-        distances = [p['distance_km'] for p in elevation_profile]
+        distances = [p.get('distance_km', 0) for p in elevation_profile]
         
-        # Calculate slopes between consecutive points
-        slopes = []
+        # Calculate metrics
+        total_distance = max(distances) if distances else 0
+        elevation_gain = 0
+        elevation_loss = 0
+        max_gradient = 0
+        
+        # Calculate gradients between consecutive points
+        gradients = []
         for i in range(1, len(elevation_profile)):
-            rise = elevation_profile[i]['elevation'] - elevation_profile[i-1]['elevation']
-            run = (elevation_profile[i]['distance_km'] - elevation_profile[i-1]['distance_km']) * 1000  # meters
+            elev_change = elevations[i] - elevations[i-1]
+            dist_change = distances[i] - distances[i-1] if i < len(distances) else 0.1
             
-            if run > 0:
-                slope_percent = (rise / run) * 100
-                slopes.append(abs(slope_percent))
-        
-        # Identify challenging sections
-        steep_sections = self._identify_steep_sections(elevation_profile, threshold=3.0)
-        tunnel_candidates = self._identify_tunnel_candidates(elevation_profile)
-        bridge_candidates = self._identify_bridge_candidates(elevation_profile)
+            if dist_change > 0:
+                # Convert to percentage gradient
+                gradient = (elev_change / (dist_change * 1000)) * 100
+                gradients.append(gradient)
+                max_gradient = max(max_gradient, abs(gradient))
+                
+                if elev_change > 0:
+                    elevation_gain += elev_change
+                else:
+                    elevation_loss += abs(elev_change)
         
         return {
-            'total_distance_km': max(distances),
-            'elevation_gain_m': sum(max(0, elevation_profile[i]['elevation'] - elevation_profile[i-1]['elevation']) 
-                                  for i in range(1, len(elevation_profile))),
-            'elevation_loss_m': sum(max(0, elevation_profile[i-1]['elevation'] - elevation_profile[i]['elevation']) 
-                                  for i in range(1, len(elevation_profile))),
-            'max_elevation_m': max(elevations),
-            'min_elevation_m': min(elevations),
-            'avg_slope_percent': sum(slopes) / len(slopes) if slopes else 0,
-            'max_slope_percent': max(slopes) if slopes else 0,
-            'steep_sections': steep_sections,
-            'tunnel_candidates': tunnel_candidates,
-            'bridge_candidates': bridge_candidates,
-            'terrain_difficulty': self._calculate_terrain_difficulty(slopes, elevations)
+            'total_distance_km': total_distance,
+            'total_elevation_gain': elevation_gain,
+            'total_elevation_loss': elevation_loss,
+            'max_elevation': max(elevations),
+            'min_elevation': min(elevations),
+            'avg_gradient': np.mean(gradients) if gradients else 0,
+            'max_gradient': max_gradient,
+            'elevation_variance': np.var(elevations)
         }
     
-    def _identify_steep_sections(self, profile: List[Dict], threshold: float = 3.0) -> List[Dict]:
-        """Identify sections requiring special engineering"""
-        steep_sections = []
-        current_section = None
-        
-        for i in range(1, len(profile)):
-            rise = profile[i]['elevation'] - profile[i-1]['elevation']
-            run = (profile[i]['distance_km'] - profile[i-1]['distance_km']) * 1000
-            
-            if run > 0:
-                slope_percent = abs(rise / run) * 100
-                
-                if slope_percent > threshold:
-                    if current_section is None:
-                        current_section = {
-                            'start_km': profile[i-1]['distance_km'],
-                            'start_elevation': profile[i-1]['elevation'],
-                            'max_slope': slope_percent
-                        }
-                    else:
-                        current_section['max_slope'] = max(current_section['max_slope'], slope_percent)
-                else:
-                    if current_section is not None:
-                        current_section['end_km'] = profile[i-1]['distance_km']
-                        current_section['end_elevation'] = profile[i-1]['elevation']
-                        current_section['length_km'] = current_section['end_km'] - current_section['start_km']
-                        steep_sections.append(current_section)
-                        current_section = None
-        
-        return steep_sections
+    def calculate_slope(self, elevation: np.ndarray) -> np.ndarray:
+        """Calculate slope gradients from elevation data"""
+        dy, dx = np.gradient(elevation)
+        slope = np.sqrt(dx**2 + dy**2)
+        return np.degrees(np.arctan(slope))
     
-    def _identify_tunnel_candidates(self, profile: List[Dict]) -> List[Dict]:
-        """Identify locations where tunnels might be beneficial"""
-        tunnel_candidates = []
+    def identify_obstacles(self, bbox: Tuple[float, float, float, float]) -> List[Dict]:
+        """Identify terrain obstacles (rivers, mountains, protected areas)"""
+        # This would integrate with OSM for water bodies, protected areas
+        query = f"""
+        [out:json][timeout:120];
+        (
+          way["natural"="water"]({bbox[1]},{bbox[0]},{bbox[3]},{bbox[2]});
+          way["waterway"="river"]({bbox[1]},{bbox[0]},{bbox[3]},{bbox[2]});
+          way["leisure"="nature_reserve"]({bbox[1]},{bbox[0]},{bbox[3]},{bbox[2]});
+          way["boundary"="protected_area"]({bbox[1]},{bbox[0]},{bbox[3]},{bbox[2]});
+        );
+        out geom;
+        """
         
-        for i in range(len(profile)):
-            if profile[i]['elevation'] > 800:  # High elevation threshold
-                # Look for mountain passes
-                window_size = min(10, len(profile) - i)
-                local_elevations = [profile[j]['elevation'] for j in range(i, min(i + window_size, len(profile)))]
-                
-                if len(local_elevations) > 3:
-                    # Check if this is a peak that could be tunneled through
-                    if (profile[i]['elevation'] == max(local_elevations) and 
-                        profile[i]['elevation'] > profile[max(0, i-5)]['elevation'] + 200 and
-                        profile[i]['elevation'] > profile[min(len(profile)-1, i+5)]['elevation'] + 200):
-                        
-                        tunnel_candidates.append({
-                            'location_km': profile[i]['distance_km'],
-                            'elevation_m': profile[i]['elevation'],
-                            'estimated_length_km': 2.0,  # Rough estimate
-                            'reason': 'mountain_pass'
-                        })
-        
-        return tunnel_candidates
+        try:
+            response = requests.post("http://overpass-api.de/api/interpreter", 
+                                   data={'data': query}, timeout=120)
+            return response.json()
+        except Exception as e:
+            self.logger.warning(f"Failed to identify obstacles: {e}")
+            return {'elements': []}
     
-    def _identify_bridge_candidates(self, profile: List[Dict]) -> List[Dict]:
-        """Identify locations where bridges might be needed"""
-        bridge_candidates = []
+    def get_terrain_cost_matrix(self, bbox: Tuple[float, float, float, float]) -> np.ndarray:
+        """Generate terrain cost matrix for pathfinding"""
+        elevation = self.get_elevation_data(bbox)
+        slope = self.calculate_slope(elevation)
         
-        for i in range(1, len(profile) - 1):
-            # Look for valleys or significant elevation drops
-            if (profile[i]['elevation'] < profile[i-1]['elevation'] - 50 and 
-                profile[i]['elevation'] < profile[i+1]['elevation'] - 50):
-                
-                bridge_candidates.append({
-                    'location_km': profile[i]['distance_km'],
-                    'elevation_m': profile[i]['elevation'],
-                    'depth_m': min(profile[i-1]['elevation'] - profile[i]['elevation'],
-                                 profile[i+1]['elevation'] - profile[i]['elevation']),
-                    'reason': 'valley_crossing'
-                })
+        # Cost increases exponentially with slope
+        cost_matrix = 1.0 + (slope / 10.0) ** 2
         
-        return bridge_candidates
+        # Add penalties for extreme elevations
+        cost_matrix += np.where(elevation > 1000, elevation / 1000, 0)
+        
+        return cost_matrix
     
-    def _calculate_terrain_difficulty(self, slopes: List[float], elevations: List[float]) -> str:
-        """Calculate overall terrain difficulty rating"""
-        if not slopes or not elevations:
-            return 'unknown'
+    def _calculate_distance(self, point1: Tuple[float, float], point2: Tuple[float, float]) -> float:
+        """Calculate distance between two points in kilometers"""
+        lat1, lon1 = point1
+        lat2, lon2 = point2
         
-        avg_slope = sum(slopes) / len(slopes)
-        max_slope = max(slopes)
-        elevation_range = max(elevations) - min(elevations)
+        R = 6371  # Earth's radius in km
         
-        if max_slope > 5.0 or elevation_range > 1000:
-            return 'very_difficult'
-        elif max_slope > 3.0 or elevation_range > 500:
-            return 'difficult'
-        elif max_slope > 1.5 or elevation_range > 200:
-            return 'moderate'
-        else:
-            return 'easy'
-    
-    def _haversine_distance(self, lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-        """Calculate distance between two points in km"""
-        R = 6371
         dlat = math.radians(lat2 - lat1)
         dlon = math.radians(lon2 - lon1)
         
-        a = (math.sin(dlat/2)**2 + 
+        a = (math.sin(dlat/2) * math.sin(dlat/2) + 
              math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * 
-             math.sin(dlon/2)**2)
+             math.sin(dlon/2) * math.sin(dlon/2))
         
-        return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-    
-    def get_terrain_cost_matrix(self, bbox: Tuple[float, float, float, float], 
-                              resolution: int = 50) -> np.ndarray:
-        """Generate terrain cost matrix for pathfinding algorithms"""
-        west, south, east, north = bbox
+        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
         
-        # Create grid of points
-        lats = np.linspace(south, north, resolution)
-        lons = np.linspace(west, east, resolution)
-        
-        cost_matrix = np.ones((resolution, resolution))
-        
-        # Sample elevations for cost calculation
-        sample_points = []
-        for i, lat in enumerate(lats):
-            for j, lon in enumerate(lons):
-                sample_points.append((lat, lon))
-        
-        # Get elevations (in batches due to API limits)
-        elevations = []
-        for i in range(0, len(sample_points), 50):
-            batch = sample_points[i:i+50]
-            batch_elevations = self._get_batch_elevations(batch)
-            elevations.extend([e['elevation'] for e in batch_elevations])
-        
-        # Fill cost matrix
-        for i in range(resolution):
-            for j in range(resolution):
-                idx = i * resolution + j
-                if idx < len(elevations):
-                    elevation = elevations[idx]
-                    
-                    # Calculate slope-based cost
-                    if i > 0 and j > 0 and idx > resolution:
-                        prev_elevation = elevations[idx - resolution - 1]
-                        slope = abs(elevation - prev_elevation) / 1000  # normalize
-                        cost_matrix[i, j] = 1 + slope * 10
-                    
-                    # Add elevation penalty for very high areas
-                    if elevation > 1000:
-                        cost_matrix[i, j] *= (1 + (elevation - 1000) / 1000)
-        
-        return cost_matrix
+        return R * c
