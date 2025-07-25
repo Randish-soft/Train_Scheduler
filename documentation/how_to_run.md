@@ -1,29 +1,31 @@
-
-# Generate:
+# Using Model (AI based)
+## Generate:
 ```bash
 poetry run python -m Model --mode generate --input input/lebanon_cities.csv --country lebanon --optimize "cost,ridership" --output-dir output/lebanon
 ```
 
-# Learn:
+## Learn:
 ```bash
 python -m Model --mode learn --country Country_Name --train-types IC,OTHERS
 ```
-## Example:
+### Example:
 ```bash
 python -m Model --mode learn --country DE --train-types IC,ICE,R,S,U
 ```
 
-## With Debug -- Resource Hogger!!!
+### With Debug -- Resource Hogger!!!
 ```bash
 python -m Model --mode learn --country DE --train-types IC --log-level debug --verbose
 ```
 
-## Belgium Learn (Stable):
+### Belgium Learn (Stable):
 ```bash
 python -m Model --mode learn --country belgium --train-types IC --log-level debug --verbose
 ```
 
-## Helper:
+### Helper:
 ```bash
 python -m Model --help 
 ```
+
+# Using the pipeline (raster)
