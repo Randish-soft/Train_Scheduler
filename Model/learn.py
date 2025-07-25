@@ -60,8 +60,9 @@ class LearningResults:
 class RailwayLearner:
     """Main learning engine that extracts intelligence from existing railways"""
     
-    def __init__(self, country: str, train_types: List[str], config: RailwayConfig):
+    def __init__(self, country: str, train_types: List[str], config: RailwayConfig, city: Optional[str] = None):
         self.country = country.upper()
+        self.city = city.lower() if city else None  # ADD THIS LINE
         self.train_types = train_types
         self.config = config
         self.logger = logging.getLogger(__name__)
@@ -83,7 +84,6 @@ class RailwayLearner:
         # Learning cache
         self.extracted_data = {}
         self.processed_data = {}
-        
     def execute(self, 
                focus: Optional[List[str]] = None,
                data_sources: Optional[str] = None) -> LearningResults:
@@ -161,17 +161,20 @@ class RailwayLearner:
             'operational_data': []
         }
         
-        # Get country bounding box
-        country_bounds = get_country_bounds(self.country)
-        if not country_bounds:
-            raise ValueError(f"Unknown country code: {self.country}")
-        
-        self.logger.info(f"🗺️ Extracting data for {self.country} within bounds {country_bounds}")
+        # Log extraction scope
+        if self.city:
+            self.logger.info(f"🗺️ Extracting data for {self.city.capitalize()} in {self.country}")
+        else:
+            # Get country bounding box
+            country_bounds = get_country_bounds(self.country)
+            if not country_bounds:
+                raise ValueError(f"Unknown country code: {self.country}")
+            self.logger.info(f"🗺️ Extracting data for {self.country} within bounds {country_bounds}")
         
         try:
             # Extract railway infrastructure from OSM
             self.logger.info("🚉 Extracting stations from OpenStreetMap...")
-            stations = self.osm_extractor.extract_train_stations(self.country)
+            stations = self.osm_extractor.extract_train_stations(self.country, city=self.city)  # PASS CITY PARAMETER
             extraction_results['stations'] = stations
             extraction_results['stations_count'] = len(stations)
             
@@ -179,7 +182,7 @@ class RailwayLearner:
             
             # Extract track network
             self.logger.info("🛤️ Extracting track network...")
-            tracks = self.osm_extractor.extract_railway_tracks(self.country)
+            tracks = self.osm_extractor.extract_railway_tracks(self.country, city=self.city)  # PASS CITY PARAMETER
             extraction_results['tracks'] = tracks
             extraction_results['tracks_count'] = len(tracks)
             
@@ -367,10 +370,12 @@ class RailwayLearner:
                     import traceback
                     self.logger.debug(traceback.format_exc())
             
-            # Extract terrain data for key routes
+            # Extract terrain data for key routes (limit scope for city-focused extraction)
             if stations and len(stations) >= 2:
-                self.logger.info("🏔️ Analyzing terrain along major routes...")
-                terrain_data = self._extract_terrain_for_routes(stations[:10])  # Sample first 10 stations
+                # For city extraction, analyze fewer routes
+                route_limit = 3 if self.city else 5
+                self.logger.info(f"🏔️ Analyzing terrain along {route_limit} major routes...")
+                terrain_data = self._extract_terrain_for_routes(stations[:min(10, len(stations))], limit=route_limit)
                 extraction_results['terrain_data'] = terrain_data
             
             # Cache extracted data
@@ -383,8 +388,7 @@ class RailwayLearner:
                 raise
         
         return extraction_results
-    
-    def _extract_terrain_for_routes(self, stations: List[Dict]) -> Dict[str, Any]:
+    def _extract_terrain_for_routes(self, stations: List[Dict], limit: int = 5) -> Dict[str, Any]:
         """Extract terrain data for routes between major stations"""
         
         terrain_data = {
@@ -394,7 +398,7 @@ class RailwayLearner:
         }
         
         # Analyze terrain between consecutive station pairs
-        for i in range(min(5, len(stations) - 1)):  # Limit to 5 routes to avoid API limits
+        for i in range(min(limit, len(stations) - 1)):  # Use limit parameter
             start_station = stations[i]
             end_station = stations[i + 1]
             
@@ -425,7 +429,6 @@ class RailwayLearner:
                 self.logger.warning(f"⚠️ Failed to analyze terrain for {start_station['name']} - {end_station['name']}: {e}")
         
         return terrain_data
-    
     def _analyze_extracted_data(self, extraction_results: Dict[str, Any]) -> Dict[str, Any]:
         """Process and analyze extracted railway data"""
         
