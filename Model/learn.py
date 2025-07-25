@@ -60,8 +60,9 @@ class LearningResults:
 class RailwayLearner:
     """Main learning engine that extracts intelligence from existing railways"""
     
-    def __init__(self, country: str, train_types: List[str], config: RailwayConfig):
+    def __init__(self, country: str, train_types: List[str], config: RailwayConfig, city: Optional[str] = None):
         self.country = country.upper()
+        self.city = city.lower() if city else None  # ADD THIS LINE
         self.train_types = train_types
         self.config = config
         self.logger = logging.getLogger(__name__)
@@ -83,7 +84,6 @@ class RailwayLearner:
         # Learning cache
         self.extracted_data = {}
         self.processed_data = {}
-        
     def execute(self, 
                focus: Optional[List[str]] = None,
                data_sources: Optional[str] = None) -> LearningResults:
@@ -150,7 +150,6 @@ class RailwayLearner:
             self.logger.error(f"❌ Learning failed: {e}")
             results.learning_time = time.time() - start_time
             raise
-    
     def _extract_railway_data(self) -> Dict[str, Any]:
         """Extract raw railway data from various sources"""
         
@@ -162,17 +161,20 @@ class RailwayLearner:
             'operational_data': []
         }
         
-        # Get country bounding box
-        country_bounds = get_country_bounds(self.country)
-        if not country_bounds:
-            raise ValueError(f"Unknown country code: {self.country}")
-        
-        self.logger.info(f"🗺️ Extracting data for {self.country} within bounds {country_bounds}")
+        # Log extraction scope
+        if self.city:
+            self.logger.info(f"🗺️ Extracting data for {self.city.capitalize()} in {self.country}")
+        else:
+            # Get country bounding box
+            country_bounds = get_country_bounds(self.country)
+            if not country_bounds:
+                raise ValueError(f"Unknown country code: {self.country}")
+            self.logger.info(f"🗺️ Extracting data for {self.country} within bounds {country_bounds}")
         
         try:
             # Extract railway infrastructure from OSM
             self.logger.info("🚉 Extracting stations from OpenStreetMap...")
-            stations = self.osm_extractor.extract_train_stations(self.country)
+            stations = self.osm_extractor.extract_train_stations(self.country, city=self.city)  # PASS CITY PARAMETER
             extraction_results['stations'] = stations
             extraction_results['stations_count'] = len(stations)
             
@@ -180,7 +182,7 @@ class RailwayLearner:
             
             # Extract track network
             self.logger.info("🛤️ Extracting track network...")
-            tracks = self.osm_extractor.extract_railway_tracks(self.country)
+            tracks = self.osm_extractor.extract_railway_tracks(self.country, city=self.city)  # PASS CITY PARAMETER
             extraction_results['tracks'] = tracks
             extraction_results['tracks_count'] = len(tracks)
             
@@ -193,52 +195,187 @@ class RailwayLearner:
                     'elements': []
                 }
                 
-                # Convert stations to OSM format
-                for station in stations:
+                # Keep track of all nodes added
+                node_id_map = {}  # Maps original ID to our safe ID
+                safe_node_counter = 0
+                
+                # Convert stations to OSM format with safe IDs
+                for i, station in enumerate(stations):
+                    # Create safe station ID
+                    original_id = str(station.get('id', f'station_{i}')).strip()
+                    if not original_id or original_id == '':
+                        original_id = f'station_{i}'
+                    
+                    safe_id = f'node_{safe_node_counter}'
+                    node_id_map[original_id] = safe_id
+                    safe_node_counter += 1
+                    
+                    # Parse platform count safely
+                    platforms_value = station.get('platforms', 1)
+                    try:
+                        if isinstance(platforms_value, str):
+                            if not platforms_value.strip() or not platforms_value.isdigit():
+                                platforms = 1
+                            else:
+                                platforms = int(platforms_value)
+                        else:
+                            platforms = int(platforms_value) if platforms_value else 1
+                    except:
+                        platforms = 1
+                    
                     osm_element = {
                         'type': 'node',
-                        'id': station['id'],
-                        'lat': station['lat'],
-                        'lon': station['lon'],
+                        'id': safe_id,
+                        'lat': float(station.get('lat', 0)),
+                        'lon': float(station.get('lon', 0)),
                         'tags': {
                             'railway': 'station',
-                            'name': station['name'],
+                            'name': station.get('name', f'Station {i}'),
                             'operator': station.get('operator', ''),
-                            'platforms': str(station.get('platforms', 1))
+                            'platforms': str(platforms),
+                            'original_id': original_id
                         }
                     }
                     osm_data['elements'].append(osm_element)
                 
-                # Convert tracks to OSM format
-                for track in tracks:
-                    osm_element = {
-                        'type': 'way',
-                        'id': track['id'],
-                        'geometry': track['geometry'],
-                        'tags': {
-                            'railway': 'rail',
-                            'maxspeed': str(track.get('maxspeed', 100)),
-                            'electrified': 'yes' if track.get('electrified') else 'no',
-                            'usage': track.get('usage', 'main')
+                # Process tracks and create nodes from geometry if needed
+                way_counter = 0
+                for i, track in enumerate(tracks):
+                    # Create safe track ID
+                    original_track_id = str(track.get('id', f'track_{i}')).strip()
+                    if not original_track_id or original_track_id == '':
+                        original_track_id = f'track_{i}'
+                    
+                    safe_track_id = f'way_{way_counter}'
+                    way_counter += 1
+                    
+                    # Parse speed safely
+                    speed_value = track.get('maxspeed', 100)
+                    try:
+                        if isinstance(speed_value, str):
+                            import re
+                            match = re.search(r'\d+', speed_value)
+                            if match:
+                                maxspeed = int(match.group())
+                            else:
+                                maxspeed = 100
+                        else:
+                            maxspeed = int(speed_value) if speed_value else 100
+                    except:
+                        maxspeed = 100
+                    
+                    # Ensure reasonable speed values
+                    if maxspeed < 10 or maxspeed > 400:
+                        maxspeed = 100
+                    
+                    # Get track geometry
+                    geometry = track.get('geometry', [])
+                    track_nodes = track.get('nodes', [])
+                    
+                    # Create way nodes from geometry or existing nodes
+                    way_node_ids = []
+                    
+                    if track_nodes and len(track_nodes) >= 2:
+                        # Use existing node references if available
+                        for node_ref in track_nodes:
+                            node_ref_str = str(node_ref).strip()
+                            if node_ref_str and node_ref_str in node_id_map:
+                                way_node_ids.append(node_id_map[node_ref_str])
+                            else:
+                                # Create new node for this reference
+                                safe_id = f'node_{safe_node_counter}'
+                                safe_node_counter += 1
+                                node_id_map[node_ref_str] = safe_id
+                                
+                                # Add a placeholder node (we don't have coordinates)
+                                osm_element = {
+                                    'type': 'node',
+                                    'id': safe_id,
+                                    'lat': 0,  # Will be updated if we find it in stations
+                                    'lon': 0,
+                                    'tags': {'railway': 'track_node', 'original_id': node_ref_str}
+                                }
+                                osm_data['elements'].append(osm_element)
+                                way_node_ids.append(safe_id)
+                    
+                    elif geometry and len(geometry) >= 2:
+                        # Create nodes from geometry points
+                        for j, point in enumerate(geometry):
+                            if isinstance(point, (list, tuple)) and len(point) >= 2:
+                                # Create unique node for this geometry point
+                                safe_id = f'node_{safe_node_counter}'
+                                safe_node_counter += 1
+                                
+                                lat = float(point[1]) if len(point) > 1 else 0
+                                lon = float(point[0]) if len(point) > 0 else 0
+                                
+                                osm_element = {
+                                    'type': 'node',
+                                    'id': safe_id,
+                                    'lat': lat,
+                                    'lon': lon,
+                                    'tags': {'railway': 'track_point'}
+                                }
+                                osm_data['elements'].append(osm_element)
+                                way_node_ids.append(safe_id)
+                    else:
+                        # No geometry available - skip this track
+                        self.logger.debug(f"Skipping track {original_track_id} - no geometry")
+                        continue
+                    
+                    # Only add way if we have at least 2 nodes
+                    if len(way_node_ids) >= 2:
+                        osm_element = {
+                            'type': 'way',
+                            'id': safe_track_id,
+                            'nodes': way_node_ids,
+                            'tags': {
+                                'railway': 'rail',
+                                'maxspeed': str(maxspeed),
+                                'electrified': 'yes' if track.get('electrified') else 'no',
+                                'usage': track.get('usage', 'main'),
+                                'gauge': str(track.get('gauge', '1435')),
+                                'original_id': original_track_id
+                            }
                         }
-                    }
-                    osm_data['elements'].append(osm_element)
+                        osm_data['elements'].append(osm_element)
+                    else:
+                        self.logger.debug(f"Skipping track {original_track_id} - insufficient nodes")
                 
-                # Build network graph
-                network_graph = self.network_parser.parse_osm_to_network(osm_data)
-                extraction_results['network_graph'] = network_graph
-                
-                # Analyze network patterns
-                network_analysis = self.network_parser.analyze_network_patterns()
-                extraction_results['network_analysis'] = network_analysis
-                
-                self.logger.info(f"🔗 Built network with {network_graph.number_of_nodes()} nodes, "
-                               f"{network_graph.number_of_edges()} edges")
+                try:
+                    # Build network graph
+                    self.logger.info(f"📊 Created {len([e for e in osm_data['elements'] if e['type'] == 'node'])} nodes, "
+                                f"{len([e for e in osm_data['elements'] if e['type'] == 'way'])} ways")
+                    
+                    network_graph = self.network_parser.parse_osm_to_network(osm_data)
+                    
+                    if network_graph and network_graph.number_of_nodes() > 0:
+                        extraction_results['network_graph'] = network_graph
+                        
+                        # Analyze network patterns
+                        try:
+                            network_analysis = self.network_parser.analyze_network_patterns()
+                            extraction_results['network_analysis'] = network_analysis
+                        except Exception as e:
+                            self.logger.warning(f"⚠️ Network analysis failed: {e}")
+                            extraction_results['network_analysis'] = {}
+                        
+                        self.logger.info(f"🔗 Built network with {network_graph.number_of_nodes()} nodes, "
+                                    f"{network_graph.number_of_edges()} edges")
+                    else:
+                        self.logger.warning("⚠️ Network graph is empty - pattern learning will be limited")
+                        
+                except Exception as e:
+                    self.logger.error(f"❌ Network building failed: {e}")
+                    import traceback
+                    self.logger.debug(traceback.format_exc())
             
-            # Extract terrain data for key routes
+            # Extract terrain data for key routes (limit scope for city-focused extraction)
             if stations and len(stations) >= 2:
-                self.logger.info("🏔️ Analyzing terrain along major routes...")
-                terrain_data = self._extract_terrain_for_routes(stations[:10])  # Sample first 10 stations
+                # For city extraction, analyze fewer routes
+                route_limit = 3 if self.city else 5
+                self.logger.info(f"🏔️ Analyzing terrain along {route_limit} major routes...")
+                terrain_data = self._extract_terrain_for_routes(stations[:min(10, len(stations))], limit=route_limit)
                 extraction_results['terrain_data'] = terrain_data
             
             # Cache extracted data
@@ -251,8 +388,7 @@ class RailwayLearner:
                 raise
         
         return extraction_results
-    
-    def _extract_terrain_for_routes(self, stations: List[Dict]) -> Dict[str, Any]:
+    def _extract_terrain_for_routes(self, stations: List[Dict], limit: int = 5) -> Dict[str, Any]:
         """Extract terrain data for routes between major stations"""
         
         terrain_data = {
@@ -262,7 +398,7 @@ class RailwayLearner:
         }
         
         # Analyze terrain between consecutive station pairs
-        for i in range(min(5, len(stations) - 1)):  # Limit to 5 routes to avoid API limits
+        for i in range(min(limit, len(stations) - 1)):  # Use limit parameter
             start_station = stations[i]
             end_station = stations[i + 1]
             
@@ -293,7 +429,6 @@ class RailwayLearner:
                 self.logger.warning(f"⚠️ Failed to analyze terrain for {start_station['name']} - {end_station['name']}: {e}")
         
         return terrain_data
-    
     def _analyze_extracted_data(self, extraction_results: Dict[str, Any]) -> Dict[str, Any]:
         """Process and analyze extracted railway data"""
         
@@ -361,18 +496,53 @@ class RailwayLearner:
             operator = station.get('operator', 'unknown')
             operators[operator] = operators.get(operator, 0) + 1
             
-            # Platform count
+            # Platform count - FIXED: Handle string values properly
             platforms = station.get('platforms', 1)
-            platform_counts.append(platforms)
+            try:
+                # Convert to int, handling various formats
+                if isinstance(platforms, str):
+                    # Handle empty strings
+                    if not platforms.strip():
+                        platform_count = 1
+                    # Handle numeric strings
+                    elif platforms.isdigit():
+                        platform_count = int(platforms)
+                    # Handle ranges like "2-3"
+                    elif '-' in platforms:
+                        parts = platforms.split('-')
+                        platform_count = int(parts[0])  # Use lower value
+                    else:
+                        platform_count = 1  # Default
+                elif isinstance(platforms, (int, float)):
+                    platform_count = int(platforms)
+                else:
+                    platform_count = 1  # Default
+                    
+                platform_counts.append(platform_count)
+            except (ValueError, TypeError) as e:
+                self.logger.warning(f"Invalid platform count '{platforms}' for station, using default: {e}")
+                platform_counts.append(1)
         
         analysis['categories'] = categories
         analysis['operators'] = operators
-        analysis['platform_distribution'] = {
-            'mean': np.mean([int(x) if x.isdigit() else 0 for x in platform_counts]),
-            'median': np.median(platform_counts),
-            'max': np.max(platform_counts),
-            'distribution': dict(zip(*np.unique(platform_counts, return_counts=True)))
-        }
+        
+        # Calculate platform distribution statistics
+        if platform_counts:
+            analysis['platform_distribution'] = {
+                'mean': float(np.mean(platform_counts)),
+                'median': float(np.median(platform_counts)),
+                'max': int(np.max(platform_counts)),
+                'min': int(np.min(platform_counts)),
+                'distribution': dict(zip(*np.unique(platform_counts, return_counts=True)))
+            }
+        else:
+            analysis['platform_distribution'] = {
+                'mean': 0.0,
+                'median': 0.0,
+                'max': 0,
+                'min': 0,
+                'distribution': {}
+            }
         
         # Geographic distribution
         if len(stations) > 1:
@@ -401,7 +571,8 @@ class RailwayLearner:
                     'mean_spacing': np.mean(spacings),
                     'median_spacing': np.median(spacings),
                     'min_spacing': np.min(spacings),
-                    'max_spacing': np.max(spacings)
+                    'max_spacing': np.max(spacings),
+                    'std_spacing': np.std(spacings)
                 }
         
         return analysis
@@ -422,23 +593,72 @@ class RailwayLearner:
         electrified_count = sum(1 for track in tracks if track.get('electrified'))
         analysis['electrification'] = {
             'electrified_count': electrified_count,
-            'electrification_ratio': electrified_count / len(tracks),
+            'electrification_ratio': electrified_count / len(tracks) if len(tracks) > 0 else 0,
             'non_electrified_count': len(tracks) - electrified_count
         }
         
-        # Speed distribution
-        speeds = [track.get('maxspeed', 100) for track in tracks]
-        analysis['speed_distribution'] = {
-            'mean_speed': np.mean(speeds),
-            'median_speed': np.median(speeds),
-            'max_speed': np.max(speeds),
-            'speed_categories': {
-                'high_speed_300plus': sum(1 for s in speeds if s >= 300),
-                'fast_200_300': sum(1 for s in speeds if 200 <= s < 300),
-                'medium_120_200': sum(1 for s in speeds if 120 <= s < 200),
-                'low_below_120': sum(1 for s in speeds if s < 120)
+        # Speed distribution - FIXED: Handle string values properly
+        speeds = []
+        for track in tracks:
+            speed_value = track.get('maxspeed', 100)
+            try:
+                # Handle various speed formats
+                if isinstance(speed_value, str):
+                    # Remove any non-numeric characters (like 'km/h')
+                    speed_str = speed_value.strip()
+                    # Handle empty strings
+                    if not speed_str:
+                        speed = 100  # Default speed
+                    else:
+                        # Extract numeric part
+                        import re
+                        match = re.search(r'\d+', speed_str)
+                        if match:
+                            speed = int(match.group())
+                        else:
+                            speed = 100  # Default if no number found
+                elif isinstance(speed_value, (int, float)):
+                    speed = int(speed_value)
+                else:
+                    speed = 100  # Default
+                
+                # Sanity check for reasonable speed values
+                if speed < 10:
+                    speed = 100  # Probably a data error
+                elif speed > 400:
+                    speed = 200  # Cap at reasonable high-speed rail max
+                    
+                speeds.append(speed)
+            except (ValueError, TypeError) as e:
+                self.logger.warning(f"Invalid speed value '{speed_value}' for track, using default: {e}")
+                speeds.append(100)
+        
+        if speeds:
+            analysis['speed_distribution'] = {
+                'mean_speed': float(np.mean(speeds)),
+                'median_speed': float(np.median(speeds)),
+                'max_speed': int(np.max(speeds)),
+                'min_speed': int(np.min(speeds)),
+                'speed_categories': {
+                    'high_speed_300plus': sum(1 for s in speeds if s >= 300),
+                    'fast_200_300': sum(1 for s in speeds if 200 <= s < 300),
+                    'medium_120_200': sum(1 for s in speeds if 120 <= s < 200),
+                    'low_below_120': sum(1 for s in speeds if s < 120)
+                }
             }
-        }
+        else:
+            analysis['speed_distribution'] = {
+                'mean_speed': 0.0,
+                'median_speed': 0.0,
+                'max_speed': 0,
+                'min_speed': 0,
+                'speed_categories': {
+                    'high_speed_300plus': 0,
+                    'fast_200_300': 0,
+                    'medium_120_200': 0,
+                    'low_below_120': 0
+                }
+            }
         
         # Track usage patterns
         usage_types = {}
@@ -448,11 +668,25 @@ class RailwayLearner:
         
         analysis['track_types'] = usage_types
         
-        # Gauge analysis
-        gauges = [track.get('gauge', '1435') for track in tracks]
+        # Gauge analysis - FIXED: Handle string values
         gauge_distribution = {}
-        for gauge in gauges:
-            gauge_distribution[gauge] = gauge_distribution.get(gauge, 0) + 1
+        for track in tracks:
+            gauge_value = track.get('gauge', '1435')
+            try:
+                # Convert to string to handle both numeric and string inputs
+                gauge_str = str(gauge_value).strip()
+                if not gauge_str:
+                    gauge_str = '1435'  # Standard gauge default
+                
+                # Extract numeric part if needed
+                import re
+                match = re.search(r'\d+', gauge_str)
+                if match:
+                    gauge_str = match.group()
+                
+                gauge_distribution[gauge_str] = gauge_distribution.get(gauge_str, 0) + 1
+            except:
+                gauge_distribution['1435'] = gauge_distribution.get('1435', 0) + 1
         
         analysis['gauge_analysis'] = gauge_distribution
         
@@ -472,7 +706,26 @@ class RailwayLearner:
         service_types = {}
         
         for station in stations:
-            platforms = station.get('platforms', 1)
+            # FIXED: Parse platform count properly
+            platforms_value = station.get('platforms', 1)
+            try:
+                if isinstance(platforms_value, str):
+                    if not platforms_value.strip():
+                        platforms = 1
+                    elif platforms_value.isdigit():
+                        platforms = int(platforms_value)
+                    elif '-' in platforms_value:
+                        # Handle ranges like "2-3"
+                        parts = platforms_value.split('-')
+                        platforms = int(parts[0]) if parts[0].isdigit() else 1
+                    else:
+                        platforms = 1
+                elif isinstance(platforms_value, (int, float)):
+                    platforms = int(platforms_value)
+                else:
+                    platforms = 1
+            except (ValueError, TypeError):
+                platforms = 1
             
             # Classify service type based on platform count and location
             if platforms >= 6:
@@ -492,18 +745,39 @@ class RailwayLearner:
         high_frequency_indicators = 0
         total_electrified = sum(1 for track in tracks if track.get('electrified'))
         
-        if total_electrified / len(tracks) > 0.8:  # High electrification
+        if len(tracks) > 0 and total_electrified / len(tracks) > 0.8:  # High electrification
             high_frequency_indicators += 1
         
-        if len([s for s in stations if s.get('platforms', 1) >= 4]) > len(stations) * 0.3:
+        # Count major stations (platforms >= 4)
+        major_stations_count = 0
+        total_stations = len(stations)
+        
+        for station in stations:
+            # Parse platforms again for this calculation
+            platforms_value = station.get('platforms', 1)
+            try:
+                if isinstance(platforms_value, str):
+                    if not platforms_value.strip() or not platforms_value.isdigit():
+                        platforms = 1
+                    else:
+                        platforms = int(platforms_value)
+                else:
+                    platforms = int(platforms_value) if platforms_value else 1
+            except:
+                platforms = 1
+                
+            if platforms >= 4:
+                major_stations_count += 1
+        
+        if total_stations > 0 and major_stations_count / total_stations > 0.3:
             high_frequency_indicators += 1
         
         frequency_category = 'high' if high_frequency_indicators >= 2 else 'medium' if high_frequency_indicators == 1 else 'low'
         
         analysis['frequency_patterns'] = {
             'frequency_category': frequency_category,
-            'electrification_ratio': total_electrified / len(tracks),
-            'major_stations_ratio': len([s for s in stations if s.get('platforms', 1) >= 4]) / len(stations)
+            'electrification_ratio': total_electrified / len(tracks) if len(tracks) > 0 else 0,
+            'major_stations_ratio': major_stations_count / total_stations if total_stations > 0 else 0
         }
         
         return analysis
@@ -521,13 +795,30 @@ class RailwayLearner:
             'efficiency': {}
         }
         
+        # Import networkx functions
+        import networkx as nx
+        
         # Basic network metrics
+        num_nodes = network_graph.number_of_nodes()
+        num_edges = network_graph.number_of_edges()
+        
         analysis['basic_metrics'] = {
-            'nodes': network_graph.number_of_nodes(),
-            'edges': network_graph.number_of_edges(),
-            'density': network_graph.number_of_edges() / (network_graph.number_of_nodes() * (network_graph.number_of_nodes() - 1)) if network_graph.number_of_nodes() > 1 else 0,
-            'components': len(list(network_graph.subgraph(c) for c in network_graph.connected_components()))
+            'nodes': num_nodes,
+            'edges': num_edges,
+            'density': nx.density(network_graph) if num_nodes > 1 else 0
         }
+        
+        # Count connected components based on graph type
+        if network_graph.is_directed():
+            # For directed graphs, use weakly connected components
+            num_components = nx.number_weakly_connected_components(network_graph)
+            analysis['basic_metrics']['components'] = num_components
+            analysis['basic_metrics']['is_connected'] = num_components == 1
+        else:
+            # For undirected graphs, use connected components
+            num_components = nx.number_connected_components(network_graph)
+            analysis['basic_metrics']['components'] = num_components
+            analysis['basic_metrics']['is_connected'] = nx.is_connected(network_graph)
         
         # Degree distribution
         degrees = [d for n, d in network_graph.degree()]
@@ -535,12 +826,37 @@ class RailwayLearner:
             analysis['connectivity'] = {
                 'avg_degree': np.mean(degrees),
                 'max_degree': np.max(degrees),
+                'min_degree': np.min(degrees),
                 'degree_std': np.std(degrees),
                 'hub_count': sum(1 for d in degrees if d >= 4)  # Stations with 4+ connections
             }
+            
+            # Find isolated nodes (degree 0)
+            isolated_nodes = [n for n, d in network_graph.degree() if d == 0]
+            analysis['connectivity']['isolated_nodes'] = len(isolated_nodes)
+        
+        # Additional metrics for non-empty graphs
+        if num_edges > 0:
+            # Calculate clustering coefficient for undirected graphs
+            if not network_graph.is_directed():
+                analysis['connectivity']['clustering_coefficient'] = nx.average_clustering(network_graph)
+            
+            # Calculate centrality measures for a sample of nodes (to avoid long computation)
+            sample_size = min(100, num_nodes)
+            if sample_size > 10:
+                sample_nodes = list(network_graph.nodes())[:sample_size]
+                
+                try:
+                    # Degree centrality
+                    degree_centrality = nx.degree_centrality(network_graph)
+                    top_degree_nodes = sorted(degree_centrality.items(), key=lambda x: x[1], reverse=True)[:5]
+                    analysis['centrality']['top_degree_nodes'] = [
+                        {'node': node, 'centrality': cent} for node, cent in top_degree_nodes
+                    ]
+                except:
+                    pass
         
         return analysis
-    
     def _learn_patterns(self, analysis_results: Dict[str, Any], focus: Optional[List[str]]) -> Dict[str, Any]:
         """Learn operational and design patterns from analyzed data"""
         
@@ -558,11 +874,15 @@ class RailwayLearner:
         if stations_data and (not focus or 'stations' in focus):
             self.logger.info("🚉 Learning station placement patterns...")
             try:
-                self.station_analyzer.learn_from_existing_stations(stations_data)
+                # Pass population data as empty list if not available
+                self.station_analyzer.learn_from_existing_stations(stations_data, [])
                 station_patterns = self.station_analyzer.get_learned_patterns()
                 pattern_results['station_patterns'] = station_patterns
+                self.logger.info(f"✅ Learned {len(station_patterns)} station patterns")
             except Exception as e:
                 self.logger.warning(f"⚠️ Station pattern learning failed: {e}")
+                import traceback
+                self.logger.debug(traceback.format_exc())
         
         # Learn track intelligence
         if tracks_data and (not focus or 'tracks' in focus):

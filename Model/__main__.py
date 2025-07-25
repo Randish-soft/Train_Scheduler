@@ -60,6 +60,9 @@ Examples:
   # Learn from German railway network
   python -m Model --mode learn --country germany --train-types "ICE,IC,S"
   
+  # Learn from Brussels area only
+  python -m Model --mode learn --country belgium --city brussels --train-types "IC,S"
+  
   # Generate route plan for Belgian cities
   python -m Model --mode generate --input cities.csv --country belgium
   
@@ -90,6 +93,7 @@ Examples:
     # Learning mode arguments
     learn_group = parser.add_argument_group("Learning Mode")
     learn_group.add_argument("--country", help="Country to learn from")
+    learn_group.add_argument("--city", help="Focus on specific city (e.g., brussels, antwerp, ghent)")
     learn_group.add_argument("--train-types", default="S,IC,ICE", 
                            help="Train types to consider (comma-separated)")
     learn_group.add_argument("--focus", help="Learning focus areas (comma-separated)")
@@ -163,7 +167,12 @@ def validate_arguments(args: argparse.Namespace) -> bool:
 def execute_learn_mode(args: argparse.Namespace, config: RailwayConfig) -> int:
     """Execute learning mode"""
     logger = logging.getLogger(__name__)
-    logger.info(f"🧠 Learning from {args.country} railway network...")
+    
+    # Show appropriate message based on scope
+    if args.city:
+        logger.info(f"🧠 Learning from {args.city.capitalize()} railway network in {args.country}...")
+    else:
+        logger.info(f"🧠 Learning from {args.country} railway network...")
     
     try:
         # Parse train types
@@ -174,11 +183,12 @@ def execute_learn_mode(args: argparse.Namespace, config: RailwayConfig) -> int:
         if args.focus:
             focus_areas = [f.strip() for f in args.focus.split(",")]
         
-        # Initialize learner
+        # Initialize learner with city option
         learner = RailwayLearner(
             country=args.country,
             train_types=train_types,
-            config=config
+            config=config,
+            city=args.city  # Pass city parameter
         )
         
         # Execute learning
@@ -186,14 +196,98 @@ def execute_learn_mode(args: argparse.Namespace, config: RailwayConfig) -> int:
         
         # Print results summary
         logger.info("✅ Learning completed successfully!")
-        logger.info(f"📊 Learned from {results.get('stations_analyzed', 0)} stations")
-        logger.info(f"🛤️  Analyzed {results.get('track_segments', 0)} track segments")
-        logger.info(f"🚉 Identified {results.get('railyards_found', 0)} railyard patterns")
         
-        # Save models
-        model_dir = Path(args.output_dir) / "models"
+        # Access LearningResults dataclass attributes directly
+        logger.info(f"📊 Learned from {results.stations_analyzed} stations")
+        logger.info(f"🛤️  Analyzed {results.track_segments} track segments")
+        logger.info(f"🏭 Identified {results.railyards_found} railyard patterns")
+        logger.info(f"🚄 Analyzed {results.train_services_analyzed} train services")
+        
+        # Display quality metrics
+        logger.info(f"\n📈 Learning Quality:")
+        logger.info(f"  🎯 Data quality: {results.data_quality_score:.1%}")
+        logger.info(f"  📡 Coverage: {results.coverage_completeness:.1%}")
+        logger.info(f"  🔮 Learning confidence: {results.learning_confidence:.1%}")
+        
+        # Show model performance if available
+        if results.model_accuracies:
+            logger.info(f"\n🤖 Model Performance:")
+            for model_name, accuracy in results.model_accuracies.items():
+                logger.info(f"  • {model_name}: {accuracy:.3f}")
+        
+        # Show pattern statistics
+        if results.station_patterns:
+            logger.info(f"\n🚉 Station Patterns Learned:")
+            pattern_count = len(results.station_patterns)
+            logger.info(f"  • Total patterns: {pattern_count}")
+            if 'feature_importance' in results.station_patterns:
+                top_features = sorted(
+                    results.station_patterns['feature_importance'].items(), 
+                    key=lambda x: x[1], 
+                    reverse=True
+                )[:3]
+                logger.info(f"  • Top factors: {', '.join([f[0] for f in top_features])}")
+        
+        if results.track_patterns:
+            logger.info(f"\n🛤️  Track Patterns Learned:")
+            if 'cost_analysis' in results.track_patterns:
+                logger.info(f"  • Cost models learned")
+            if 'engineering_patterns' in results.track_patterns:
+                logger.info(f"  • Engineering patterns identified")
+        
+        # Show key insights
+        if results.key_insights:
+            logger.info(f"\n💡 Key Insights:")
+            for i, insight in enumerate(results.key_insights[:5], 1):
+                logger.info(f"  {i}. {insight}")
+        
+        # Show recommendations
+        if results.recommendations:
+            logger.info(f"\n🎯 Recommendations:")
+            for i, rec in enumerate(results.recommendations[:3], 1):
+                logger.info(f"  {i}. {rec}")
+        
+        # Save models - include city in path if specified
+        if args.city:
+            model_dir = Path(args.output_dir) / "models" / args.country.lower() / args.city.lower()
+        else:
+            model_dir = Path(args.output_dir) / "models" / args.country.lower()
+        model_dir.mkdir(parents=True, exist_ok=True)
+        
         learner.save_models(str(model_dir))
-        logger.info(f"💾 Models saved to {model_dir}")
+        logger.info(f"\n💾 Models and patterns saved to {model_dir}")
+        
+        # Create summary file
+        summary_file = model_dir / "learning_summary.txt"
+        with open(summary_file, 'w') as f:
+            f.write(f"Railway AI Learning Summary\n")
+            f.write(f"=========================\n\n")
+            f.write(f"Country: {results.country}\n")
+            if args.city:
+                f.write(f"City: {args.city.capitalize()}\n")
+            f.write(f"Learning Date: {results.learning_date}\n")
+            f.write(f"Learning Time: {results.learning_time:.1f} seconds\n\n")
+            f.write(f"Infrastructure Analyzed:\n")
+            f.write(f"- Stations: {results.stations_analyzed}\n")
+            f.write(f"- Track Segments: {results.track_segments}\n")
+            f.write(f"- Railyards: {results.railyards_found}\n\n")
+            f.write(f"Quality Metrics:\n")
+            f.write(f"- Data Quality: {results.data_quality_score:.1%}\n")
+            f.write(f"- Coverage: {results.coverage_completeness:.1%}\n")
+            f.write(f"- Confidence: {results.learning_confidence:.1%}\n\n")
+            
+            if results.key_insights:
+                f.write(f"Key Insights:\n")
+                for insight in results.key_insights:
+                    f.write(f"- {insight}\n")
+                f.write("\n")
+            
+            if results.recommendations:
+                f.write(f"Recommendations:\n")
+                for rec in results.recommendations:
+                    f.write(f"- {rec}\n")
+        
+        logger.info(f"📄 Summary saved to {summary_file}")
         
         return 0
         
