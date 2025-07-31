@@ -1,355 +1,438 @@
 """
-Data Input Processing Module
-============================
-
-Handles automatic city data retrieval from multiple sources including:
-- OpenStreetMap Nominatim API
-- Built-in city databases
-- Manual input fallback
-
-Author: Miguel Ibrahim E
+Enhanced city data processing module with multiple online data sources.
+Dynamically searches OpenStreetMap, GeoNames, Wikidata, and REST Countries APIs.
 """
 
-import requests
+import json
+import time
 import logging
-from typing import List, Dict, Any, Optional
-from dataclasses import dataclass
+from typing import List, Dict, Any, Optional, Tuple
+import requests
+from collections import defaultdict
+import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
-
-@dataclass
-class CityData:
-    """Data class for city information."""
-    name: str
-    population: int
-    latitude: float
-    longitude: float
-    elevation: Optional[float] = None
-    region: Optional[str] = None
-    is_capital: bool = False
-    economic_importance: Optional[str] = None
-
+logger = logging.getLogger(__name__)
 
 class InputProcessor:
-    """Main class for processing and retrieving city data."""
+    """Main class for processing city input data."""
     
     def __init__(self, country: str):
         self.country = country
-        self.logger = logging.getLogger(__name__)
+        self.cities = []
+        self.processor = CityDataProcessor()
         
-    def process(self) -> List[Dict[str, Any]]:
-        """
-        Main processing method that retrieves city data.
+    def process(self, demand_threshold: int = 50000, min_cities: int = 5, 
+                max_cities: int = 20) -> List[Dict[str, Any]]:
+        """Process cities for the country."""
+        logger.info(f"🌍 Processing city data for {self.country}...")
         
-        Returns:
-            List of city dictionaries with standardized format
-        """
-        self.logger.info(f"🌍 Processing city data for {self.country}...")
+        # Get cities from multiple sources
+        self.cities = self.processor.process_cities(self.country, min_cities, max_cities * 2)
         
-        # Try multiple data sources
-        cities = []
+        # Filter by population threshold
+        filtered_cities = [c for c in self.cities if c.get('population', 0) >= demand_threshold]
         
-        # Method 1: Try built-in database first (fastest)
-        cities.extend(self._get_builtin_cities())
+        # If too few cities, progressively lower threshold
+        if len(filtered_cities) < min_cities:
+            logger.warning(f"Only {len(filtered_cities)} cities above {demand_threshold} population")
+            
+            # Try with lower thresholds
+            thresholds = [30000, 20000, 10000, 5000, 1000]
+            for threshold in thresholds:
+                filtered_cities = [c for c in self.cities if c.get('population', 0) >= threshold]
+                if len(filtered_cities) >= min_cities:
+                    logger.info(f"Using population threshold of {threshold} to get {len(filtered_cities)} cities")
+                    break
+            
+            # If still not enough, estimate population for cities without data
+            if len(filtered_cities) < min_cities:
+                for city in self.cities:
+                    if not city.get('population'):
+                        self.processor._estimate_population(city)
+                
+                # Re-filter and sort
+                filtered_cities = sorted(self.cities, key=lambda x: x.get('population', 0), reverse=True)[:max_cities]
         
-        # Method 2: Try OpenStreetMap Nominatim if no built-in data
-        if not cities:
-            cities.extend(self._fetch_from_nominatim())
-        
-        # Method 3: Manual input as last resort
-        if not cities:
-            cities.extend(self._get_manual_input())
-        
-        if cities:
-            self.logger.info(f"✅ Retrieved {len(cities)} cities for {self.country}")
-            # Convert CityData objects to dictionaries and sort by population
-            city_dicts = [self._city_to_dict(city) for city in cities]
-            return sorted(city_dicts, key=lambda x: x['population'], reverse=True)
-        else:
-            self.logger.warning(f"⚠️ Could not retrieve city data for {self.country}")
-            return []
+        logger.info(f"✅ Retrieved {len(filtered_cities)} cities for {self.country}")
+        return filtered_cities
     
-    def _get_builtin_cities(self) -> List[CityData]:
-        """Get cities from built-in database."""
-        builtin_data = {
-            "ghana": [
-                CityData("Accra", 2291352, 5.6037, -0.1870, 61, "Greater Accra", True),
-                CityData("Kumasi", 2069350, 6.6885, -1.6244, 287, "Ashanti"),
-                CityData("Tamale", 371351, 9.4008, -0.8393, 183, "Northern"),
-                CityData("Takoradi", 232919, 4.8845, -1.7537, 9, "Western"),
-                CityData("Cape Coast", 169894, 5.1053, -1.2466, 17, "Central"),
-                CityData("Obuasi", 175043, 6.2022, -1.6640, 244, "Ashanti"),
-                CityData("Tema", 161612, 5.6698, -0.0166, 16, "Greater Accra"),
-                CityData("Koforidua", 120971, 6.0840, -0.2540, 167, "Eastern"),
-                CityData("Sunyani", 248496, 7.3386, -2.3265, 310, "Brong-Ahafo"),
-                CityData("Ho", 69998, 6.6110, 0.4713, 158, "Volta")
-            ],
-            "nigeria": [
-                CityData("Lagos", 15388000, 6.5244, 3.3792, 41, "Lagos", False),
-                CityData("Kano", 4103000, 12.0022, 8.5920, 472, "Kano"),
-                CityData("Ibadan", 3649000, 7.3775, 3.9470, 150, "Oyo"),
-                CityData("Abuja", 3278000, 9.0579, 7.4951, 840, "FCT", True),
-                CityData("Port Harcourt", 1865000, 4.8156, 7.0498, 16, "Rivers"),
-                CityData("Benin City", 1782000, 6.3350, 5.6037, 87, "Edo"),
-                CityData("Maiduguri", 1197000, 11.8311, 13.1510, 354, "Borno"),
-                CityData("Zaria", 975153, 11.1110, 7.7240, 610, "Kaduna"),
-                CityData("Aba", 897560, 5.1066, 7.3667, 122, "Abia"),
-                CityData("Jos", 900000, 9.9288, 8.8921, 1238, "Plateau"),
-                CityData("Ilorin", 847582, 8.4966, 4.5426, 273, "Kwara"),
-                CityData("Oyo", 736072, 7.8460, 3.9314, 355, "Oyo"),
-                CityData("Enugu", 688862, 6.4414, 7.4989, 223, "Enugu"),
-                CityData("Abeokuta", 593100, 7.1475, 3.3619, 67, "Ogun"),
-                CityData("Osogbo", 570126, 7.7667, 4.5667, 156, "Osun")
-            ],
-            "kenya": [
-                CityData("Nairobi", 4397073, -1.2921, 36.8219, 1795, "Nairobi", True),
-                CityData("Mombasa", 1208333, -4.0435, 39.6682, 17, "Mombasa"),
-                CityData("Kisumu", 409928, -0.1022, 34.7617, 1131, "Kisumu"),
-                CityData("Nakuru", 570674, -0.3031, 36.0800, 1850, "Nakuru"),
-                CityData("Eldoret", 475716, 0.5143, 35.2698, 2085, "Uasin Gishu"),
-                CityData("Thika", 136576, -1.0332, 37.0692, 1631, "Kiambu"),
-                CityData("Malindi", 207253, -3.2175, 40.1169, 23, "Kilifi"),
-                CityData("Kitale", 106187, 1.0157, 35.0062, 1900, "Trans-Nzoia"),
-                CityData("Garissa", 119696, -0.4536, 39.6401, 164, "Garissa"),
-                CityData("Kakamega", 107227, 0.2827, 34.7519, 1535, "Kakamega"),
-                CityData("Kisii", 124834, -0.6817, 34.7680, 1477, "Kisii"),
-                CityData("Nyeri", 119272, -0.4167, 36.9500, 1759, "Nyeri")
-            ],
-            "rwanda": [
-                CityData("Kigali", 1132686, -1.9441, 30.0619, 1567, "Kigali", True),
-                CityData("Butare", 89600, -2.5967, 29.7391, 1768, "Southern"),
-                CityData("Gitarama", 87613, -2.0756, 29.7564, 1849, "Southern"),
-                CityData("Musanze", 86685, -1.5008, 29.6336, 1850, "Northern"),
-                CityData("Gisenyi", 83623, -1.7025, 29.2562, 1486, "Western"),
-                CityData("Byumba", 70593, -1.5761, 30.0678, 1873, "Northern"),
-                CityData("Cyangugu", 63883, -2.4843, 28.9075, 1547, "Western"),
-                CityData("Kibungo", 46240, -2.1547, 30.7342, 1245, "Eastern")
-            ],
-            "uganda": [
-                CityData("Kampala", 1507080, 0.3476, 32.5825, 1190, "Central", True),
-                CityData("Gulu", 152276, 2.7856, 32.2998, 1104, "Northern"),
-                CityData("Lira", 119323, 2.2421, 32.8954, 1063, "Northern"),
-                CityData("Mbarara", 97500, -0.6103, 30.6481, 1420, "Western"),
-                CityData("Jinja", 93061, 0.4244, 33.2043, 1134, "Eastern"),
-                CityData("Mbale", 88500, 1.0827, 34.1795, 1154, "Eastern"),
-                CityData("Mukono", 67269, 0.3531, 32.7553, 1181, "Central"),
-                CityData("Kasese", 58427, 0.1833, 30.0833, 950, "Western"),
-                CityData("Masaka", 45200, -0.3397, 31.7313, 1328, "Central"),
-                CityData("Entebbe", 42763, 0.0590, 32.4467, 1155, "Central")
-            ],
-            "tanzania": [
-                CityData("Dar es Salaam", 4364541, -6.7924, 39.2083, 74, "Dar es Salaam"),
-                CityData("Dodoma", 410956, -6.1630, 35.7516, 1119, "Dodoma", True),
-                CityData("Mwanza", 706543, -2.5164, 32.9175, 1140, "Mwanza"),
-                CityData("Zanzibar", 403658, -6.1659, 39.2026, 17, "Zanzibar"),
-                CityData("Arusha", 416442, -3.3869, 36.6830, 1400, "Arusha"),
-                CityData("Mbeya", 385279, -8.9094, 33.4534, 1700, "Mbeya"),
-                CityData("Morogoro", 315866, -6.8235, 37.6614, 526, "Morogoro"),
-                CityData("Tanga", 273332, -5.0693, 39.0993, 49, "Tanga")
-            ],
-            "ethiopia": [
-                CityData("Addis Ababa", 3040740, 8.9806, 38.7578, 2355, "Addis Ababa", True),
-                CityData("Dire Dawa", 252279, 9.5931, 41.8661, 1213, "Dire Dawa"),
-                CityData("Mek'ele", 215546, 13.4967, 39.4700, 2084, "Tigray"),
-                CityData("Gondar", 207044, 12.6090, 37.4700, 2133, "Amhara"),
-                CityData("Awasa", 318618, 7.0469, 38.4762, 1708, "SNNP"),
-                CityData("Bahir Dar", 221991, 11.5742, 37.3611, 1801, "Amhara"),
-                CityData("Dessie", 151174, 11.1300, 39.6333, 2470, "Amhara"),
-                CityData("Jimma", 207573, 7.6667, 36.8333, 1780, "Oromia")
-            ]
+    def get_cities(self) -> List[Dict[str, Any]]:
+        """Get the processed cities."""
+        return self.cities
+
+
+class CityDataProcessor:
+    """Handles fetching city data from multiple sources."""
+    
+    def __init__(self):
+        # API endpoints
+        self.osm_url = "https://nominatim.openstreetmap.org/search"
+        self.geonames_url = "http://api.geonames.org/searchJSON"
+        self.wikidata_url = "https://query.wikidata.org/sparql"
+        self.restcountries_url = "https://restcountries.com/v3.1/name"
+        self.overpass_url = "https://overpass-api.de/api/interpreter"
+        
+        # Free GeoNames username (you can register for free at geonames.org)
+        self.geonames_username = "demo"
+        
+        # Headers for requests
+        self.headers = {
+            'User-Agent': 'RailwayRasterPipeline/1.0 (https://github.com/railway-raster)'
         }
         
-        country_key = self.country.lower()
-        if country_key in builtin_data:
-            self.logger.info(f"✅ Using built-in city database for {self.country}")
-            return builtin_data[country_key]
-        else:
-            self.logger.info(f"ℹ️  No built-in data for {self.country}, trying external sources...")
+    def process_cities(self, country: str, min_cities: int = 5, max_cities: int = 20) -> List[Dict[str, Any]]:
+        """Main entry point to process cities for a country."""
+        # Try multiple sources in parallel
+        cities = self._fetch_from_multiple_sources(country, max_cities * 2)
+        
+        if not cities:
+            logger.warning(f"⚠️ No cities found for {country}")
             return []
+        
+        # Deduplicate and merge city data
+        cities = self._deduplicate_cities(cities)
+        
+        # Sort by population and limit
+        cities = sorted(cities, key=lambda x: x.get('population', 0), reverse=True)[:max_cities]
+        
+        return cities
     
-    def _fetch_from_nominatim(self) -> List[CityData]:
-        """Fetch cities from OpenStreetMap Nominatim API."""
-        try:
-            self.logger.info("🌐 Fetching city data from OpenStreetMap Nominatim...")
-            
-            # Search for major cities in the country
-            url = "https://nominatim.openstreetmap.org/search"
-            params = {
-                'q': f"city in {self.country}",
-                'format': 'json',
-                'limit': 50,
-                'addressdetails': 1,
-                'extratags': 1
+    def _fetch_from_multiple_sources(self, country: str, limit: int) -> List[Dict[str, Any]]:
+        """Fetch city data from multiple sources in parallel."""
+        all_cities = []
+        
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            # Submit all API calls
+            futures = {
+                executor.submit(self._fetch_from_wikidata, country, limit): "Wikidata",
+                executor.submit(self._fetch_from_osm, country, limit): "OpenStreetMap",
+                executor.submit(self._fetch_from_geonames, country, limit): "GeoNames",
+                executor.submit(self._fetch_from_overpass, country, limit): "Overpass",
+                executor.submit(self._fetch_country_info, country): "REST Countries"
             }
             
-            headers = {'User-Agent': 'Railway-Raster-Pipeline/1.0'}
-            response = requests.get(url, params=params, headers=headers, timeout=30)
+            # Collect results as they complete
+            for future in as_completed(futures):
+                source = futures[future]
+                try:
+                    result = future.result(timeout=10)
+                    if isinstance(result, list):
+                        logger.info(f"✅ {source}: Found {len(result)} cities")
+                        all_cities.extend(result)
+                    elif isinstance(result, dict) and source == "REST Countries":
+                        # Use country info to enhance other data
+                        self.country_info = result
+                except Exception as e:
+                    logger.warning(f"⚠️ {source} failed: {str(e)}")
+        
+        return all_cities
+    
+    def _fetch_from_wikidata(self, country: str, limit: int) -> List[Dict[str, Any]]:
+        """Fetch city data from Wikidata SPARQL endpoint."""
+        try:
+            # SPARQL query for cities with population
+            query = f"""
+            SELECT ?city ?cityLabel ?population ?coord WHERE {{
+                ?city wdt:P31/wdt:P279* wd:Q515 ;  # instance of city
+                      wdt:P17 ?country ;             # country
+                      wdt:P1082 ?population ;         # population
+                      wdt:P625 ?coord .               # coordinates
+                ?country rdfs:label "{country}"@en .
+                SERVICE wikibase:label {{ bd:serviceParam wikibase:language "en". }}
+            }}
+            ORDER BY DESC(?population)
+            LIMIT {limit}
+            """
+            
+            response = requests.get(
+                self.wikidata_url,
+                params={'query': query, 'format': 'json'},
+                headers=self.headers,
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                cities = []
+                
+                for item in data['results']['bindings']:
+                    # Parse coordinates
+                    coord_str = item['coord']['value']
+                    match = re.search(r'Point\(([-\d.]+) ([-\d.]+)\)', coord_str)
+                    if match:
+                        lon, lat = float(match.group(1)), float(match.group(2))
+                        cities.append({
+                            'city': item['cityLabel']['value'],
+                            'city_name': item['cityLabel']['value'],  # Add for backward compatibility
+                            'population': int(item['population']['value']),
+                            'latitude': lat,
+                            'longitude': lon,
+                            'source': 'Wikidata',
+                            'country': country
+                        })
+                
+                return cities
+        except Exception as e:
+            logger.debug(f"Wikidata error: {e}")
+        
+        return []
+    
+    def _fetch_from_osm(self, country: str, limit: int) -> List[Dict[str, Any]]:
+        """Fetch city data from OpenStreetMap Nominatim."""
+        try:
+            # Add delay to respect rate limits
+            time.sleep(1)
+            
+            params = {
+                'country': country,
+                'featuretype': 'city',
+                'format': 'json',
+                'limit': limit,
+                'extratags': 1,
+                'addressdetails': 1
+            }
+            
+            response = requests.get(
+                self.osm_url,
+                params=params,
+                headers=self.headers,
+                timeout=10
+            )
             
             if response.status_code == 200:
                 data = response.json()
                 cities = []
                 
                 for item in data:
-                    try:
-                        name = item.get('display_name', '').split(',')[0]
-                        lat = float(item.get('lat', 0))
-                        lon = float(item.get('lon', 0))
-                        
-                        # Estimate population based on place importance and type
-                        importance = float(item.get('importance', 0))
-                        place_type = item.get('type', '')
-                        
-                        # Better population estimation based on place type and importance
-                        if place_type == 'city':
-                            population = int(importance * 2000000) if importance > 0.5 else 500000
-                        elif place_type == 'town':
-                            population = int(importance * 500000) if importance > 0.3 else 100000
-                        else:
-                            population = int(importance * 1000000) if importance > 0 else 50000
-                        
-                        # Get region/state from address
-                        address = item.get('address', {})
-                        region = address.get('state') or address.get('region') or address.get('county', '')
-                        
-                        city = CityData(
-                            name=name,
-                            population=max(population, 10000),  # Minimum 10k population
-                            latitude=lat,
-                            longitude=lon,
-                            region=region,
-                            is_capital=('capital' in name.lower() or 'capital' in item.get('display_name', '').lower())
-                        )
-                        cities.append(city)
-                        
-                    except (ValueError, KeyError, TypeError) as e:
-                        self.logger.debug(f"Skipping malformed city data: {e}")
-                        continue
+                    city_data = {
+                        'city': item.get('display_name', '').split(',')[0],
+                        'city_name': item.get('display_name', '').split(',')[0],  # Add for backward compatibility
+                        'latitude': float(item.get('lat', 0)),
+                        'longitude': float(item.get('lon', 0)),
+                        'source': 'OpenStreetMap',
+                        'country': country
+                    }
+                    
+                    # Try to get population from extratags
+                    if 'extratags' in item:
+                        pop_str = item['extratags'].get('population', '')
+                        if pop_str and pop_str.isdigit():
+                            city_data['population'] = int(pop_str)
+                    
+                    cities.append(city_data)
                 
-                # Remove duplicates and sort by population
-                unique_cities = {}
-                for city in cities:
-                    if city.name not in unique_cities or city.population > unique_cities[city.name].population:
-                        unique_cities[city.name] = city
-                
-                final_cities = list(unique_cities.values())
-                self.logger.info(f"✅ Retrieved {len(final_cities)} cities from OpenStreetMap")
-                return final_cities[:20]  # Return top 20 cities
-                
-        except requests.RequestException as e:
-            self.logger.warning(f"🌐 OpenStreetMap API request failed: {e}")
-            return []
+                return cities
         except Exception as e:
-            self.logger.warning(f"🌐 OpenStreetMap data processing failed: {e}")
-            return []
+            logger.debug(f"OSM error: {e}")
+        
+        return []
     
-    def _get_manual_input(self) -> List[CityData]:
-        """Get city data through manual user input."""
-        self.logger.info("🙋 Automatic data retrieval failed. Requesting manual input...")
-        
-        cities = []
-        
-        print(f"\n🏙️  Could not automatically retrieve city data for {self.country}")
-        print("Please provide information for major cities manually.")
-        print("Press Enter with empty city name to finish.")
-        print("\nFormat: city_name,population,latitude,longitude")
-        print("Example: Accra,2291352,5.6037,-0.1870")
-        print("\n💡 You can find coordinates at: https://www.latlong.net/")
-        
-        while True:
-            try:
-                user_input = input(f"\nEnter city data (or press Enter to finish): ").strip()
-                
-                if not user_input:
-                    break
-                
-                parts = [p.strip() for p in user_input.split(',')]
-                if len(parts) >= 4:
-                    name = parts[0]
-                    population = int(parts[1])
-                    latitude = float(parts[2])
-                    longitude = float(parts[3])
+    def _fetch_from_geonames(self, country: str, limit: int) -> List[Dict[str, Any]]:
+        """Fetch city data from GeoNames."""
+        try:
+            # First get country code
+            country_response = requests.get(
+                "http://api.geonames.org/searchJSON",
+                params={
+                    'q': country,
+                    'maxRows': 1,
+                    'username': self.geonames_username,
+                    'featureClass': 'A',
+                    'featureCode': 'PCLI'
+                },
+                timeout=10
+            )
+            
+            if country_response.status_code == 200:
+                country_data = country_response.json()
+                if country_data.get('geonames'):
+                    country_code = country_data['geonames'][0].get('countryCode', '')
                     
-                    # Validate coordinates
-                    if not (-90 <= latitude <= 90):
-                        print("❌ Invalid latitude. Must be between -90 and 90.")
-                        continue
-                    if not (-180 <= longitude <= 180):
-                        print("❌ Invalid longitude. Must be between -180 and 180.")
-                        continue
+                    # Now get cities
+                    params = {
+                        'country': country_code,
+                        'featureClass': 'P',
+                        'featureCode': 'PPL',
+                        'cities': 'cities15000',  # cities with pop > 15000
+                        'maxRows': limit,
+                        'orderby': 'population',
+                        'username': self.geonames_username
+                    }
                     
-                    city = CityData(
-                        name=name,
-                        population=population,
-                        latitude=latitude,
-                        longitude=longitude
+                    response = requests.get(
+                        "http://api.geonames.org/searchJSON",
+                        params=params,
+                        timeout=10
                     )
-                    cities.append(city)
-                    print(f"✅ Added {name} (population: {population:,})")
-                else:
-                    print("❌ Invalid format. Please use: city_name,population,latitude,longitude")
                     
-            except (ValueError, IndexError) as e:
-                print(f"❌ Error parsing input: {e}")
-                print("Please check the format and try again.")
-                continue
-            except KeyboardInterrupt:
-                print("\n⚠️ Input cancelled by user")
-                break
+                    if response.status_code == 200:
+                        data = response.json()
+                        cities = []
+                        
+                        for item in data.get('geonames', []):
+                            cities.append({
+                                'city': item.get('name', ''),
+                                'city_name': item.get('name', ''),  # Add for backward compatibility
+                                'population': item.get('population', 0),
+                                'latitude': float(item.get('lat', 0)),
+                                'longitude': float(item.get('lng', 0)),
+                                'source': 'GeoNames',
+                                'country': country
+                            })
+                        
+                        return cities
+        except Exception as e:
+            logger.debug(f"GeoNames error: {e}")
         
-        if cities:
-            self.logger.info(f"✅ Collected {len(cities)} cities from manual input")
-        else:
-            self.logger.warning("⚠️ No cities provided via manual input")
+        return []
+    
+    def _fetch_from_overpass(self, country: str, limit: int) -> List[Dict[str, Any]]:
+        """Fetch city data from Overpass API (OpenStreetMap)."""
+        try:
+            # Overpass QL query
+            query = f"""
+            [out:json][timeout:25];
+            area["name:en"="{country}"]->.searchArea;
+            (
+              node["place"="city"](area.searchArea);
+              node["place"="town"]["population"](area.searchArea);
+            );
+            out body {limit};
+            """
             
-        return cities
-    
-    def _city_to_dict(self, city: CityData) -> Dict[str, Any]:
-        """Convert CityData object to dictionary."""
-        return {
-            'city_name': city.name,
-            'population': city.population,
-            'latitude': city.latitude,
-            'longitude': city.longitude,
-            'elevation': city.elevation,
-            'region': city.region,
-            'is_capital': city.is_capital,
-            'economic_importance': city.economic_importance
-        }
-    
-    def validate_city_data(self, cities: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Validate and clean city data."""
-        valid_cities = []
+            response = requests.post(
+                self.overpass_url,
+                data={'data': query},
+                headers=self.headers,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                cities = []
+                
+                for element in data.get('elements', []):
+                    tags = element.get('tags', {})
+                    city_data = {
+                        'city': tags.get('name', tags.get('name:en', '')),
+                        'city_name': tags.get('name', tags.get('name:en', '')),  # Add for backward compatibility
+                        'latitude': element.get('lat', 0),
+                        'longitude': element.get('lon', 0),
+                        'source': 'Overpass',
+                        'country': country
+                    }
+                    
+                    # Try to get population
+                    pop_str = tags.get('population', '')
+                    if pop_str and pop_str.replace(',', '').isdigit():
+                        city_data['population'] = int(pop_str.replace(',', ''))
+                    
+                    if city_data['city']:  # Only add if city name exists
+                        cities.append(city_data)
+                
+                return cities
+        except Exception as e:
+            logger.debug(f"Overpass error: {e}")
         
+        return []
+    
+    def _fetch_country_info(self, country: str) -> Dict[str, Any]:
+        """Fetch country information from REST Countries API."""
+        try:
+            response = requests.get(
+                f"{self.restcountries_url}/{country}",
+                params={'fullText': False},
+                headers=self.headers,
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data:
+                    country_data = data[0]
+                    return {
+                        'name': country_data.get('name', {}).get('common', country),
+                        'population': country_data.get('population', 0),
+                        'area': country_data.get('area', 0),
+                        'capital': country_data.get('capital', [None])[0],
+                        'region': country_data.get('region', ''),
+                        'subregion': country_data.get('subregion', '')
+                    }
+        except Exception as e:
+            logger.debug(f"REST Countries error: {e}")
+        
+        return {}
+    
+    def _deduplicate_cities(self, cities: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Deduplicate and merge city data from multiple sources."""
+        city_map = defaultdict(list)
+        
+        # Group cities by approximate location
         for city in cities:
-            # Check required fields
-            required_fields = ['city_name', 'population', 'latitude', 'longitude']
-            if not all(field in city and city[field] is not None for field in required_fields):
-                self.logger.warning(f"Skipping city with missing required fields: {city.get('city_name', 'Unknown')}")
+            if not city.get('city'):
                 continue
+                
+            # Create a key based on rounded coordinates
+            lat_key = round(city.get('latitude', 0), 1)
+            lon_key = round(city.get('longitude', 0), 1)
+            key = (lat_key, lon_key)
             
-            # Validate data types and ranges
-            try:
-                city['population'] = int(city['population'])
-                city['latitude'] = float(city['latitude'])
-                city['longitude'] = float(city['longitude'])
-                
-                # Validate ranges
-                if not (-90 <= city['latitude'] <= 90):
-                    self.logger.warning(f"Invalid latitude for {city['city_name']}: {city['latitude']}")
-                    continue
-                    
-                if not (-180 <= city['longitude'] <= 180):
-                    self.logger.warning(f"Invalid longitude for {city['city_name']}: {city['longitude']}")
-                    continue
-                    
-                if city['population'] <= 0:
-                    self.logger.warning(f"Invalid population for {city['city_name']}: {city['population']}")
-                    continue
-                
-                valid_cities.append(city)
-                
-            except (ValueError, TypeError) as e:
-                self.logger.warning(f"Data type error for {city.get('city_name', 'Unknown')}: {e}")
-                continue
+            city_map[key].append(city)
         
-        self.logger.info(f"✅ Validated {len(valid_cities)} out of {len(cities)} cities")
-        return valid_cities
+        # Merge cities at same location
+        merged_cities = []
+        for city_group in city_map.values():
+            if not city_group:
+                continue
+                
+            # Merge data, preferring sources with population data
+            merged = city_group[0].copy()
+            
+            # Ensure both city and city_name fields exist
+            if 'city' in merged and 'city_name' not in merged:
+                merged['city_name'] = merged['city']
+            elif 'city_name' in merged and 'city' not in merged:
+                merged['city'] = merged['city_name']
+            
+            for city in city_group[1:]:
+                # Update with better data
+                if city.get('population', 0) > merged.get('population', 0):
+                    merged['population'] = city['population']
+                
+                # Collect all sources
+                if 'source' in city and 'source' in merged:
+                    sources = set(merged['source'].split(', '))
+                    sources.add(city['source'])
+                    merged['source'] = ', '.join(sorted(sources))
+            
+            # Only include if we have minimum required data
+            if merged.get('latitude') and merged.get('longitude'):
+                merged_cities.append(merged)
+        
+        return merged_cities
+    
+    def _estimate_population(self, city: Dict[str, Any]) -> None:
+        """Estimate population if missing using various methods."""
+        if city.get('population'):
+            return
+            
+        # Method 1: Use country's capital population as reference
+        if hasattr(self, 'country_info') and self.country_info:
+            if city['city'] == self.country_info.get('capital'):
+                # Capitals typically have 5-10% of country population
+                city['population'] = int(self.country_info.get('population', 0) * 0.07)
+                city['population_estimated'] = True
+                return
+        
+        # Method 2: Default estimates based on city classification
+        # This is a last resort - real data is always preferred
+        city['population'] = 100000  # Default assumption
+        city['population_estimated'] = True
+
+
+def process_country_cities(country: str, demand_threshold: int = 50000, 
+                          min_cities: int = 5, max_cities: int = 20) -> List[Dict[str, Any]]:
+    """Main function called by the pipeline - backward compatibility."""
+    processor = InputProcessor(country)
+    return processor.process(demand_threshold, min_cities, max_cities)
