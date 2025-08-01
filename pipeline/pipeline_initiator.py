@@ -38,7 +38,6 @@ try:
     from processing.creating_time_table import TimeTableCreator
     from processing.electrification import ElectrificationPlanner
     from processing.plotting_route import RoutePlotter
-    from processing.plotting_lightRail import LightRailPlotter
     from processing.railyard_plotter import RailyardPlotter
     from processing.nimby_analyzer import NIMBYAnalyzer
     
@@ -459,16 +458,7 @@ class EnhancedPipelineOrchestrator:
                 self.logger.warning(f"⚠️ ElectrificationPlanner not implemented: {e}")
                 results['electrification'] = {}
         
-        # 2.4: Light rail analysis (if requested)
-        if self.args.light_rail:
-            self.logger.info("🚊 Analyzing light rail opportunities...")
-            try:
-                light_rail_plotter = LightRailPlotter(results, self.output_dir)
-                light_rail_plotter.plot()
-                self.logger.info("✅ Light rail analysis completed")
-            except Exception as e:
-                self.logger.warning(f"⚠️ LightRailPlotter not implemented: {e}")
-        
+
         # 2.5: Railyard planning
         self.logger.info("🏭 Planning railyard locations...")
         try:
