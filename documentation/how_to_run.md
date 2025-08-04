@@ -29,3 +29,14 @@ python -m Model --help
 ```
 
 # Using the pipeline (raster)
+
+## kick off the full “Learn” pipeline for Belgium 🇧🇪
+```bash
+python -m pipeline.pipeline_initiator --country Belgium --mode learn
+```
+
+## Add --refresh if you want to ignore any cached OSM/GTFS/terrain files:
+
+```bash
+python -m pipeline.pipeline_initiator --country Belgium --mode
+```
