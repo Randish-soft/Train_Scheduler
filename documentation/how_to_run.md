@@ -29,23 +29,14 @@ python -m Model --help
 ```
 
 # Using the pipeline (raster)
-python pipeline/__main__.py
 
-## OR
-python pipeline/pipeline_initiator.py
+## kick off the full “Learn” pipeline for Belgium 🇧🇪
+```bash
+python -m pipeline.pipeline_initiator --country Belgium --mode learn
+```
 
-## Example Usage:
-Full Scope:
-python pipeline/pipeline_initiator.py --country "Italy" \
-  --budget 1000000000 \
-  --min-cities 5 \
-  --max-cities 20 \
-  --urban-focus \
-  --generate-reports \
-  --output-dir ./my_output
+## Add --refresh if you want to ignore any cached OSM/GTFS/terrain files:
 
-## Dry Run
-python pipeline/pipeline_initiator.py --country "Netherlands" --dry-run --verbose
-
-## Testing 
-python pipeline/pipeline_initiator.py --country "Netherlands" --generate-reports --verbose
+```bash
+python -m pipeline.pipeline_initiator --country Belgium --mode
+```
