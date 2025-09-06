@@ -1,0 +1,14 @@
+{
+  "reports": {
+    "cost_book_csv": "artifacts/reports/cost_book.csv",
+    "timetable_csv": "artifacts/reports/timetable.csv",
+    "alignments_geojson": "artifacts/geo/alignments.geojson"
+  },
+  "models_used": {
+    "cost": "cost.pkl",
+    "speed": "speed.pkl",
+    "station": "station.pkl"
+  },
+  "lines_count": 1,
+  "timetable_rows": 130
+}

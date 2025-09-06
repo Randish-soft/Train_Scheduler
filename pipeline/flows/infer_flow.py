@@ -7,9 +7,10 @@ import logging
 import os
 import sys
 import time
-from dataclasses import dataclass, field
+from datetime import datetime, date
 from pathlib import Path
 from typing import Any, Dict, Optional
+from dataclasses import dataclass, field
 
 from . import (
     get_logger,
@@ -79,35 +80,78 @@ if steps_report is None:
 
 LOG = get_logger(__name__)
 
+# ----- JSON helpers (geometry/Path/Numpy/date safe) -----
+def _json_default(o):
+    # pathlib
+    if isinstance(o, Path):
+        return str(o)
+    # datetime
+    if isinstance(o, (datetime, date)):
+        return o.isoformat()
 
-# ----- Utilities -----
-def _timeit(log: logging.Logger, label: str):
-    class _Timer:
-        def __enter__(self_):
-            self_.t0 = time.perf_counter()
-            log.info("▶ START: %s", label)
-            return self_
-        def __exit__(self_, exc_type, exc, tb):
-            dt = time.perf_counter() - self_.t0
-            if exc:
-                log.error("✖ FAIL: %s (%.3fs) — %s", label, dt, exc, exc_info=True)
-                return False
-            log.info("✔ DONE: %s (%.3fs)", label, dt)
-            return True
-    return _Timer()
+    # numpy scalars/arrays
+    try:
+        import numpy as _np
+        if isinstance(o, (_np.integer, _np.int_, _np.int32, _np.int64)):
+            return int(o)
+        if isinstance(o, (_np.floating, _np.float_, _np.float32, _np.float64)):
+            return float(o)
+        if isinstance(o, _np.ndarray):
+            return o.tolist()
+    except Exception:
+        pass
 
+    # shapely geometry -> GeoJSON mapping
+    try:
+        from shapely.geometry.base import BaseGeometry
+        from shapely.geometry import mapping
+        if isinstance(o, BaseGeometry):
+            return mapping(o)  # {'type': 'LineString', 'coordinates': [...]}
+    except Exception:
+        pass
+
+    # GeoPandas containers
+    try:
+        import geopandas as _gpd
+        if isinstance(o, _gpd.GeoSeries):
+            return [_json_default(g) for g in o.values]
+        if isinstance(o, _gpd.GeoDataFrame):
+            return {
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "type": "Feature",
+                        "geometry": _json_default(geom),
+                        "properties": {
+                            k: _json_default(v)
+                            for k, v in props.items()
+                        },
+                    }
+                    for props, geom in zip(
+                        o.drop(columns=o.geometry.name, errors="ignore").to_dict(orient="records"),
+                        o.geometry if o.geometry is not None else [None] * len(o)
+                    )
+                ],
+            }
+    except Exception:
+        pass
+
+    # final fallback
+    return str(o)
 
 def _safe_save_json(path: Path, payload: Dict[str, Any]) -> None:
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_suffix(path.suffix + ".tmp")
-        tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+        tmp.write_text(
+            json.dumps(payload, indent=2, ensure_ascii=False, default=_json_default),
+            encoding="utf-8",
+        )
         tmp.replace(path)
         LOG.debug("Saved JSON: %s", path)
     except Exception as e:
         LOG.error("Failed to save JSON to %s: %s", path, e, exc_info=True)
         raise
-
 
 def _safe_read_json(path: Path) -> Dict[str, Any]:
     try:
@@ -128,10 +172,7 @@ def _safe_read_json(path: Path) -> Dict[str, Any]:
         LOG.error("Unexpected error reading %s: %s", path, e, exc_info=True)
         raise
 
-
 # ----- Context -----
-from dataclasses import dataclass, field
-
 @dataclass
 class InferContext:
     config_path: Path
@@ -167,6 +208,21 @@ class InferContext:
             LOG.error("Failed to apply config paths: %s", e, exc_info=True)
             raise
 
+# ----- Utilities -----
+def _timeit(log: logging.Logger, label: str):
+    class _Timer:
+        def __enter__(self_):
+            self_.t0 = time.perf_counter()
+            log.info("▶ START: %s", label)
+            return self_
+        def __exit__(self_, exc_type, exc, tb):
+            dt = time.perf_counter() - self_.t0
+            if exc:
+                log.error("✖ FAIL: %s (%.3fs) — %s", label, dt, exc, exc_info=True)
+                return False
+            log.info("✔ DONE: %s (%.3fs)", label, dt)
+            return True
+    return _Timer()
 
 # ----- Steps wrappers -----
 def _step_load_and_validate_config(ctx: InferContext) -> Dict[str, Any]:
@@ -185,15 +241,12 @@ def _step_load_and_validate_config(ctx: InferContext) -> Dict[str, Any]:
         LOG.debug("Config content preview: %s", json.dumps({k: cfg.get(k) for k in list(cfg)[:10]}, indent=2))
         return cfg
 
-
 def _step_prepare_directories(ctx: InferContext) -> None:
     with _timeit(LOG, "Ensure artifact directories"):
         ensure_dirs(ctx.artifacts_dir, ctx.models_dir, ctx.geo_dir, ctx.reports_dir, ctx.run_log_dir)
 
-
 def _step_load_models(ctx: InferContext) -> Dict[str, Any]:
     with _timeit(LOG, "Load models"):
-        # Flexible: allow models.json index, or look for standard files in models_dir
         index_path = ctx.models_dir / "models.json"
         models: Dict[str, Any] = {}
         try:
@@ -201,7 +254,6 @@ def _step_load_models(ctx: InferContext) -> Dict[str, Any]:
                 models = _safe_read_json(index_path)
                 LOG.info("Loaded model index: %s", index_path)
             else:
-                # Heuristics for expected artifacts
                 candidates = {
                     "cost": ["cost.pkl", "cost_model.pkl"],
                     "speed": ["speed.pkl", "speed_model.pkl"],
@@ -221,10 +273,8 @@ def _step_load_models(ctx: InferContext) -> Dict[str, Any]:
         except Exception as e:
             LOG.error("Failed to load models: %s", e, exc_info=True)
             raise
-        # Persist a copy into run logs for provenance
         _safe_save_json(ctx.run_log_dir / "models_loaded.json", models)
         return models
-
 
 def _step_route(ctx: InferContext, models: Dict[str, Any]) -> Dict[str, Any]:
     with _timeit(LOG, "Routing / line generation"):
@@ -238,7 +288,6 @@ def _step_route(ctx: InferContext, models: Dict[str, Any]) -> Dict[str, Any]:
             LOG.error("Route step failed: %s", e, exc_info=True)
             raise
 
-
 def _step_timetable(ctx: InferContext, models: Dict[str, Any], routes: Dict[str, Any]) -> Dict[str, Any]:
     with _timeit(LOG, "Timetable synthesis"):
         try:
@@ -251,7 +300,6 @@ def _step_timetable(ctx: InferContext, models: Dict[str, Any], routes: Dict[str,
             LOG.error("Timetable step failed: %s", e, exc_info=True)
             raise
 
-
 def _step_report(ctx: InferContext, models: Dict[str, Any], routes: Dict[str, Any], timetable: Dict[str, Any]) -> Dict[str, Any]:
     with _timeit(LOG, "Reporting / exports"):
         try:
@@ -263,7 +311,6 @@ def _step_report(ctx: InferContext, models: Dict[str, Any], routes: Dict[str, An
         except Exception as e:
             LOG.error("Report step failed: %s", e, exc_info=True)
             raise
-
 
 # ----- Orchestration (Prefect or plain) -----
 def _run_infer_sync(ctx: InferContext) -> Dict[str, Any]:
@@ -291,7 +338,6 @@ def _run_infer_sync(ctx: InferContext) -> Dict[str, Any]:
     _safe_save_json(ctx.run_log_dir / "summary_infer.json", summary)
     LOG.info("Inference pipeline finished: %s", json.dumps(summary, indent=2))
     return summary
-
 
 if prefect and prefect_flow and prefect_task:
     @prefect_task(name="load_config", retries=1, retry_delay_seconds=2)
@@ -382,7 +428,6 @@ else:
         )
         return _run_infer_sync(ctx)
 
-
 # ----- CLI Entrypoint -----
 def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Run the Inference pipeline flow.")
@@ -391,7 +436,6 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     p.add_argument("--models-dir", default=None, help="Override models directory (defaults to <artifacts_dir>/models)")
     p.add_argument("--log-level", default=os.getenv("PIPELINE_LOG_LEVEL", "INFO"), help="Logging level (DEBUG, INFO, WARNING, ERROR)")
     return p.parse_args(argv)
-
 
 def _set_global_log_level(level: str) -> None:
     try:
@@ -403,7 +447,6 @@ def _set_global_log_level(level: str) -> None:
         LOG.info("Log level set to %s", level.upper())
     except Exception as e:
         LOG.warning("Failed to set global log level to %s: %s", level, e)
-
 
 def main(argv: Optional[list[str]] = None) -> int:
     args = _parse_args(argv)
@@ -426,7 +469,6 @@ def main(argv: Optional[list[str]] = None) -> int:
     except Exception as e:
         LOG.error("Inference flow crashed: %s", e, exc_info=True)
         return 1
-
 
 if __name__ == "__main__":
     sys.exit(main())

@@ -1,0 +1,39 @@
+{
+  "lines": [
+    {
+      "id": "L1",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            420000.0,
+            6500000.0
+          ],
+          [
+            450000.0,
+            6570000.0
+          ]
+        ]
+      },
+      "meta": {
+        "name": "Fallback Line",
+        "length_km": 76.15773105863909,
+        "capex_eur": 609261848.4691126,
+        "notes": "straight-line fallback"
+      },
+      "sections": [
+        {
+          "seq": 0,
+          "structure": "at_grade",
+          "speed_kph": 120,
+          "len_km": 76.15773105863909,
+          "capex_eur": 609261848.4691126,
+          "capex_eur_km": 8000000.0
+        }
+      ]
+    }
+  ],
+  "used_features": false,
+  "n_lines": 1,
+  "notes": "Fallback straight line"
+}

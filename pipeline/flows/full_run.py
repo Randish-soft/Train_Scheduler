@@ -9,6 +9,7 @@ import sys
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional
+from datetime import datetime, date
 
 from . import (
     get_logger,
@@ -33,6 +34,45 @@ if prefect:
         LOG.warning("Prefect detected but unusable (%s). Proceeding without Prefect.", e)
         prefect = None
 
+# ----- JSON helpers (Path / dates / NumPy / Shapely-safe) -----
+def _json_default(o):
+    # pathlib
+    if isinstance(o, Path):
+        return str(o)
+    # datetime/date
+    if isinstance(o, (datetime, date)):
+        return o.isoformat()
+
+    # numpy scalars/arrays
+    try:
+        import numpy as _np
+        if isinstance(o, (_np.integer, _np.int_, _np.int32, _np.int64)):
+            return int(o)
+        if isinstance(o, (_np.floating, _np.float_, _np.float32, _np.float64)):
+            return float(o)
+        if isinstance(o, _np.ndarray):
+            return o.tolist()
+    except Exception:
+        pass
+
+    # shapely geometry -> GeoJSON mapping
+    try:
+        from shapely.geometry.base import BaseGeometry
+        from shapely.geometry import mapping
+        if isinstance(o, BaseGeometry):
+            return mapping(o)
+    except Exception:
+        pass
+
+    # final fallback
+    return str(o)
+
+def _safe_save_json(path: Path, payload) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=False, default=_json_default), encoding="utf-8")
+    tmp.replace(path)
+    LOG.debug("Saved JSON: %s", path)
 
 # ----- Utilities -----
 def _timeit(log: logging.Logger, label: str):
@@ -50,19 +90,6 @@ def _timeit(log: logging.Logger, label: str):
             return True
     return _Timer()
 
-
-def _safe_save_json(path: Path, payload: Dict[str, Any]) -> None:
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(path.suffix + ".tmp")
-        tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
-        tmp.replace(path)
-        LOG.debug("Saved JSON: %s", path)
-    except Exception as e:
-        LOG.error("Failed to save JSON to %s: %s", path, e, exc_info=True)
-        raise
-
-
 def _derive_artifacts_dir_from_config(config_path: str) -> Path:
     """
     Fast, best-effort extraction of artifacts_dir from YAML without strict parsing,
@@ -78,7 +105,6 @@ def _derive_artifacts_dir_from_config(config_path: str) -> Path:
     except Exception:
         LOG.warning("Could not derive artifacts_dir from %s, using default 'artifacts'.", config_path)
         return Path("artifacts")
-
 
 # ----- Core (sync) -----
 def _run_full_sync(
@@ -129,7 +155,6 @@ def _run_full_sync(
         models_dir = models_dir_override
         LOG.info("Using models dir override for inference: %s", models_dir)
     elif learn_result:
-        # try to read from learn summary if available
         models_dir = learn_result.get("models_dir")
         if models_dir:
             LOG.info("Using models dir from LEARN summary: %s", models_dir)
@@ -155,9 +180,8 @@ def _run_full_sync(
         summary["runs"]["infer_skipped"] = True
 
     _safe_save_json(runs_dir / "summary_full.json", summary)
-    LOG.info("Full pipeline finished:\n%s", json.dumps(summary, indent=2))
+    LOG.info("Full pipeline finished:\n%s", json.dumps(summary, indent=2, default=_json_default))
     return summary
-
 
 # ----- Prefect Orchestration -----
 if prefect and prefect_flow:
@@ -208,7 +232,6 @@ else:
             continue_on_error=continue_on_error,
         )
 
-
 # ----- CLI Entrypoint -----
 def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Run Learn+Infer pipeline in one go.")
@@ -221,7 +244,6 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     p.add_argument("--log-level", default=os.getenv("PIPELINE_LOG_LEVEL", "INFO"), help="Logging level (DEBUG, INFO, WARNING, ERROR)")
     return p.parse_args(argv)
 
-
 def _set_global_log_level(level: str) -> None:
     try:
         lvl = getattr(logging, level.upper(), logging.INFO)
@@ -232,7 +254,6 @@ def _set_global_log_level(level: str) -> None:
         LOG.info("Log level set to %s", level.upper())
     except Exception as e:
         LOG.warning("Failed to set global log level to %s: %s", level, e)
-
 
 def main(argv: Optional[list[str]] = None) -> int:
     args = _parse_args(argv)
@@ -247,7 +268,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             skip_infer=args.skip_infer,
             continue_on_error=args.continue_on_error,
         )
-        print(json.dumps(summary, indent=2, default=str))
+        print(json.dumps(summary, indent=2, default=_json_default))
         return 0
     except KeyboardInterrupt:
         LOG.error("Interrupted by user (Ctrl+C).")
@@ -258,7 +279,6 @@ def main(argv: Optional[list[str]] = None) -> int:
     except Exception as e:
         LOG.error("Full run crashed: %s", e, exc_info=True)
         return 1
-
 
 if __name__ == "__main__":
     sys.exit(main())
