@@ -112,3 +112,6 @@ temp/
 *.db
 *.lock
 ```
+
+.pkl
+*.pkl
