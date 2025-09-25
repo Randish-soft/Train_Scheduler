@@ -1,10 +1,118 @@
-.idea
-.venv
-.env
-input
-output
-data
-__pycache__
+here’s a solid `.gitignore` tailored to your pipeline repo (Python + Geo stack + your `artifacts/` outputs):
+
+```
+# ---- OS / Editor junk -------------------------------------------------------
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*.orig
+*.bak
+*.tmp
+.~*
+.vscode/
+.idea/
+
+# ---- Python bytecode / build ------------------------------------------------
+__pycache__/
 *.py[cod]
-cache
-logs
+*$py.class
+.build/
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ---- Virtual envs / package managers ---------------------------------------
+.venv/
+venv/
+env/
+env*/         # e.g. env38, env39
+.conda/
+pip-wheel-metadata/
+poetry.lock
+poetry.toml
+
+# ---- Testing / lint / coverage ---------------------------------------------
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# ---- Jupyter ----------------------------------------------------------------
+.ipynb_checkpoints/
+# Keep notebooks by default; comment-in to ignore:
+# *.ipynb
+
+# ---- Environment / secrets --------------------------------------------------
+.env
+.env.*
+*.env
+*.secret
+*.secrets
+*.key
+*.pem
+
+# Project-specific config overrides (keep example configs tracked)
+pipeline/config/*.local.yaml
+pipeline/config/*_private.yaml
+pipeline/config/*_secrets.yaml
+
+# ---- Pipeline artifacts (generated) -----------------------------------------
+artifacts/
+# If you ever want to keep the folder but not its contents:
+# artifacts/*
+# !artifacts/.gitkeep
+
+# In case some runs were placed elsewhere:
+**/runs/
+**/reports/
+**/models/
+**/features/
+**/ingest/
+**/geo/
+
+# Common generated geodata files (in case they leak outside artifacts/)
+*.parquet
+*.feather
+*.gpkg
+*.geojson
+*.shp
+*.shx
+*.dbf
+*.prj
+*.cpg
+*.tif
+*.tiff
+*.img
+*.vrt
+*.png
+*.jpg
+*.jpeg
+*.mbtiles
+
+# Logs
+*.log
+
+# ---- Cache folders from geospatial libs ------------------------------------
+# elevation (SRTM) cache (often lives under user dir, but ignore if vendored)
+.elevation/
+cache/
+tmp/
+temp/
+
+# ---- Prefect / orchestration (if used) --------------------------------------
+.prefect/
+
+# ---- Misc -------------------------------------------------------------------
+*.sqlite
+*.sqlite3
+*.db
+*.lock
+```
+
+.pkl
+*.pklvenv/
+.DS_Store

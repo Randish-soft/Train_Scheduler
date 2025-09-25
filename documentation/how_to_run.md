@@ -1,31 +1,38 @@
-# Using Model (AI based)
-## Generate:
-```bash
-poetry run python -m Model --mode generate --input input/lebanon_cities.csv --country lebanon --optimize "cost,ridership" --output-dir output/lebanon
-```
+# Pipeline Usage
 
-## Learn:
-```bash
-python -m Model --mode learn --country Country_Name --train-types IC,OTHERS
-```
-### Example:
-```bash
-python -m Model --mode learn --country DE --train-types IC,ICE,R,S,U
-```
+This pipeline can now fetch required datasets **automatically from online sources**  
+(OSM railways via Overpass + Nominatim, and SRTM topography via the `elevation` package).  
+You can still point to local files in your config if you prefer.
 
-### With Debug -- Resource Hogger!!!
-```bash
-python -m Model --mode learn --country DE --train-types IC --log-level debug --verbose
-```
+---
 
-### Belgium Learn (Stable):
-```bash
-python -m Model --mode learn --country belgium --train-types IC --log-level debug --verbose
-```
+## Run with Makefile
 
-### Helper:
 ```bash
-python -m Model --help 
-```
+# Run training (learn stage: ingest + features + train)
+make learn CONFIG=pipeline/config/belgium.example.yaml
 
-# Using the pipeline (raster)
+# Run inference (ingest + features + route + timetable + report)
+make infer CONFIG=pipeline/config/belgium.example.yaml MODELS_DIR=artifacts/models
+
+# Run full pipeline (learn + infer)
+make full CONFIG=pipeline/config/belgium.example.yaml
+
+# Run with CLI
+
+# Learn stage only
+python -m pipeline.cli learn --config pipeline/config/belgium.example.yaml --schema pipeline/config/schema/scenario.schema.json
+
+
+# No Schema:
+python -m pipeline.cli learn --config pipeline/config/belgium.example.yaml
+
+# Inference stage only
+python -m pipeline.cli infer --config pipeline/config/belgium.example.yaml --models-dir artifacts/models
+
+# Full pipeline (learn + infer)
+python -m pipeline.cli full --config pipeline/config/belgium.example.yaml
+
+
+# Cleaning
+make clean
