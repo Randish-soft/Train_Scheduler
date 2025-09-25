@@ -114,4 +114,5 @@ temp/
 ```
 
 .pkl
-*.pkl
+*.pklvenv/
+.DS_Store
