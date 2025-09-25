@@ -1,0 +1,87 @@
+data:
+  train_countries:
+    - belgium
+    - switzerland
+    - netherlands
+    - germany
+    - france
+  test_countries:
+    - lebanon
+    - egypt
+    - morocco
+    - jordan
+  
+  data_types:
+    - railways
+    - stations
+    - timetables
+    - terrain
+    - costs
+    - passenger_flow
+  
+  preprocessing:
+    normalize: true
+    handle_missing: median
+    remove_outliers: true
+    outlier_threshold: 3.5
+  
+  augmentation:
+    enabled: true
+    noise_level: 0.01
+    rotation_range: 15
+    translation_range: 0.1
+    
+  splitting:
+    test_size: 0.2
+    val_size: 0.1
+    stratify: true
+    random_state: 42
+
+features:
+  line_features:
+    - line_length_km
+    - num_segments
+    - curvature
+    - elevation_change
+    - is_electrified
+    - max_speed
+    - track_type
+  
+  station_features:
+    - num_platforms
+    - station_type
+    - has_parking
+    - accessibility_score
+    - passenger_capacity
+    - connection_count
+    - centrality_score
+  
+  terrain_features:
+    - avg_elevation
+    - max_elevation
+    - min_elevation
+    - elevation_std
+    - avg_gradient
+    - max_gradient
+    - gradient_changes
+    - terrain_complexity
+  
+  cost_features:
+    - construction_cost_km
+    - maintenance_cost_annual
+    - land_acquisition_cost
+    - tunnel_percentage
+    - bridge_percentage
+    - cost_inflation_adjusted
+
+  flow_features:
+    - daily_passengers
+    - peak_load_factor
+    - seasonal_variation
+    - growth_rate
+    - commuter_percentage
+
+cache:
+  enabled: true
+  cache_dir: data/cache
+  ttl_hours: 168

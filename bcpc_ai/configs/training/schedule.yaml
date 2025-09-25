@@ -1,0 +1,64 @@
+training:
+  epochs: 100
+  batch_size: 32
+  accumulation_steps: 1
+  
+  optimizer:
+    type: adamw
+    learning_rate: 0.001
+    weight_decay: 0.0001
+    betas: [0.9, 0.999]
+    eps: 1.0e-08
+    
+  scheduler:
+    type: cosine
+    warmup_epochs: 5
+    min_lr: 1.0e-06
+    T_max: 100
+    eta_min: 1.0e-07
+    
+  loss:
+    type: mse
+    reduction: mean
+    
+  regularization:
+    dropout: 0.3
+    weight_decay: 0.0001
+    gradient_clip: 1.0
+    label_smoothing: 0.1
+    
+  callbacks:
+    early_stopping:
+      enabled: true
+      patience: 15
+      min_delta: 0.0001
+      mode: min
+      
+    checkpoint:
+      enabled: true
+      save_best_only: true
+      save_freq: 10
+      
+    reduce_lr:
+      enabled: true
+      factor: 0.5
+      patience: 5
+      min_lr: 1.0e-07
+      
+    tensorboard:
+      enabled: true
+      log_dir: logs/tensorboard
+      
+    wandb:
+      enabled: false
+      project: bcpc-railway
+      entity: null
+      
+  mixed_precision:
+    enabled: true
+    opt_level: O1
+    
+  distributed:
+    enabled: false
+    backend: nccl
+    world_size: 1
