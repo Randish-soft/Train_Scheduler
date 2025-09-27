@@ -1,264 +1,302 @@
-import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
 import numpy as np
-from typing import Dict, List, Optional, Any
+import pandas as pd
+import geopandas as gpd
+from typing import Dict, List, Tuple, Optional
+import plotly.graph_objects as go
+import plotly.express as px
 from pathlib import Path
-import json
-import yaml
-from datetime import datetime
+import folium
+from folium import plugins
 import logging
-from jinja2 import Template
 
 logger = logging.getLogger(__name__)
 
-class ReportGenerator:
-    def __init__(self, output_dir: str = "artifacts/reports"):
+class RailwayVisualizer:
+    def __init__(self, output_dir: str = "artifacts/figures"):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
-    def generate_training_report(self, 
-                                model_name: str,
-                                config: Dict,
-                                metrics: Dict,
-                                training_time: float,
-                                save_path: Optional[str] = None) -> str:
+        # Set style
+        sns.set_style("whitegrid")
+        plt.rcParams['figure.figsize'] = (12, 8)
         
-        report = f"""
-# Training Report - {model_name}
-Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-
-## Model Configuration
-```yaml
-{yaml.dump(config, default_flow_style=False)}
-```
-
-## Training Metrics
-"""
+    def plot_route_comparison(self, predicted_route: np.ndarray, 
+                            actual_route: np.ndarray,
+                            title: str = "Route Comparison",
+                            save_path: Optional[str] = None) -> go.Figure:
+        fig = go.Figure()
         
-        # Add metrics table
-        metrics_df = pd.DataFrame([metrics])
-        report += metrics_df.to_markdown(index=False) + "\n\n"
+        # Actual route
+        if len(actual_route) > 0:
+            fig.add_trace(go.Scatter3d(
+                x=actual_route[:, 0],
+                y=actual_route[:, 1],
+                z=actual_route[:, 2] if actual_route.shape[1] > 2 else np.zeros(len(actual_route)),
+                mode='lines+markers',
+                name='Actual Route',
+                line=dict(color='blue', width=4),
+                marker=dict(size=3)
+            ))
         
-        report += f"""
-## Training Information
-- Total Training Time: {training_time:.2f} hours
-- Device Used: {config.get('device', 'cpu')}
-- Batch Size: {config.get('batch_size', 'N/A')}
-- Learning Rate: {config.get('learning_rate', 'N/A')}
-- Epochs Trained: {config.get('epochs', 'N/A')}
-
-## Model Performance Summary
-- Best Validation Loss: {metrics.get('best_val_loss', 'N/A')}
-- Final R² Score: {metrics.get('r2', 'N/A')}
-- Route Accuracy: {metrics.get('route_similarity', 'N/A')}%
-"""
+        # Predicted route
+        if len(predicted_route) > 0:
+            fig.add_trace(go.Scatter3d(
+                x=predicted_route[:, 0],
+                y=predicted_route[:, 1],
+                z=predicted_route[:, 2] if predicted_route.shape[1] > 2 else np.zeros(len(predicted_route)),
+                mode='lines+markers',
+                name='Predicted Route',
+                line=dict(color='red', width=4),
+                marker=dict(size=3)
+            ))
         
-        if save_path:
-            output_file = self.output_dir / save_path
-            output_file.write_text(report)
-            logger.info(f"Training report saved to {output_file}")
-        
-        return report
-    
-    def generate_evaluation_report(self,
-                                  model_name: str,
-                                  test_results: Dict[str, Dict],
-                                  country_metrics: Dict[str, Dict],
-                                  save_path: Optional[str] = None) -> str:
-        
-        report = f"""
-# Evaluation Report - {model_name}
-Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-
-## Overall Test Performance
-"""
-        
-        # Overall metrics
-        overall_df = pd.DataFrame([test_results.get('overall', {})])
-        report += overall_df.to_markdown(index=False) + "\n\n"
-        
-        report += "## Country-Specific Performance\n"
-        
-        for country, metrics in country_metrics.items():
-            report += f"\n### {country.capitalize()}\n"
-            
-            if 'route_metrics' in metrics:
-                report += "#### Route Prediction\n"
-                route_df = pd.DataFrame([metrics['route_metrics']])
-                report += route_df.to_markdown(index=False) + "\n"
-            
-            if 'cost_metrics' in metrics:
-                report += "\n#### Cost Estimation\n"
-                cost_df = pd.DataFrame([metrics['cost_metrics']])
-                report += cost_df.to_markdown(index=False) + "\n"
-            
-            if 'timetable_metrics' in metrics:
-                report += "\n#### Timetable Optimization\n"
-                time_df = pd.DataFrame([metrics['timetable_metrics']])
-                report += time_df.to_markdown(index=False) + "\n"
-        
-        # Add recommendations
-        report += self._generate_recommendations(test_results, country_metrics)
+        fig.update_layout(
+            title=title,
+            scene=dict(
+                xaxis_title='Longitude',
+                yaxis_title='Latitude',
+                zaxis_title='Elevation (m)'
+            ),
+            showlegend=True
+        )
         
         if save_path:
-            output_file = self.output_dir / save_path
-            output_file.write_text(report)
-            logger.info(f"Evaluation report saved to {output_file}")
+            fig.write_html(str(self.output_dir / save_path))
         
-        return report
+        return fig
     
-    def generate_inference_report(self,
-                                country: str,
-                                predictions: Dict,
-                                confidence_scores: Dict,
-                                save_path: Optional[str] = None) -> str:
+    def plot_training_history(self, history: Dict[str, List[float]],
+                            save_path: Optional[str] = None) -> plt.Figure:
+        fig, axes = plt.subplots(2, 2, figsize=(15, 10))
         
-        report = f"""
-# Railway Infrastructure Plan - {country.capitalize()}
-Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-
-## Executive Summary
-This report presents the AI-generated railway infrastructure plan for {country.capitalize()}, 
-including route predictions, station placements, cost estimates, and implementation timeline.
-
-## Predicted Railway Network
-
-### Route Overview
-- Total Network Length: {predictions.get('total_length_km', 0):.1f} km
-- Number of Lines: {predictions.get('num_lines', 0)}
-- Number of Stations: {predictions.get('num_stations', 0)}
-- Estimated Total Cost: ${predictions.get('total_cost', 0)/1e9:.2f} billion
-- Construction Timeline: {predictions.get('construction_years', 0):.1f} years
-
-### Line Details
-"""
+        # Loss plot
+        if 'train_loss' in history:
+            axes[0, 0].plot(history['train_loss'], label='Train Loss')
+        if 'val_loss' in history:
+            axes[0, 0].plot(history['val_loss'], label='Validation Loss')
+        axes[0, 0].set_xlabel('Epoch')
+        axes[0, 0].set_ylabel('Loss')
+        axes[0, 0].set_title('Loss over Time')
+        axes[0, 0].legend()
+        axes[0, 0].grid(True, alpha=0.3)
         
-        if 'lines' in predictions:
-            for line_id, line_data in predictions['lines'].items():
-                report += f"""
-#### {line_data.get('name', line_id)}
-- Length: {line_data.get('length_km', 0):.1f} km
-- Type: {line_data.get('type', 'Standard')}
-- Max Speed: {line_data.get('max_speed', 0)} km/h
-- Stations: {', '.join(line_data.get('stations', []))}
-- Estimated Cost: ${line_data.get('cost', 0)/1e6:.1f} million
-- Track Configuration:
-  - Tunnels: {line_data.get('tunnel_pct', 0):.1f}%
-  - Bridges: {line_data.get('bridge_pct', 0):.1f}%
-  - Ground Level: {line_data.get('ground_pct', 0):.1f}%
-"""
+        # Accuracy/R2 plot
+        if 'r2' in history:
+            axes[0, 1].plot(history['r2'], label='R² Score', color='green')
+        axes[0, 1].set_xlabel('Epoch')
+        axes[0, 1].set_ylabel('R² Score')
+        axes[0, 1].set_title('Model Performance')
+        axes[0, 1].legend()
+        axes[0, 1].grid(True, alpha=0.3)
         
-        report += "\n### Station Information\n"
+        # Learning rate plot
+        if 'learning_rate' in history:
+            axes[1, 0].plot(history['learning_rate'], label='Learning Rate', color='orange')
+        axes[1, 0].set_xlabel('Epoch')
+        axes[1, 0].set_ylabel('Learning Rate')
+        axes[1, 0].set_title('Learning Rate Schedule')
+        axes[1, 0].set_yscale('log')
+        axes[1, 0].legend()
+        axes[1, 0].grid(True, alpha=0.3)
         
-        if 'stations' in predictions:
-            stations_df = pd.DataFrame(predictions['stations'])
-            report += stations_df[['name', 'type', 'platforms', 'daily_passengers', 'lat', 'lon']].to_markdown(index=False) + "\n"
+        # Custom metrics
+        custom_metrics = [k for k in history.keys() 
+                         if k not in ['train_loss', 'val_loss', 'r2', 'learning_rate']]
+        if custom_metrics:
+            for metric in custom_metrics[:3]:  # Plot up to 3 custom metrics
+                axes[1, 1].plot(history[metric], label=metric)
+            axes[1, 1].set_xlabel('Epoch')
+            axes[1, 1].set_ylabel('Value')
+            axes[1, 1].set_title('Custom Metrics')
+            axes[1, 1].legend()
+            axes[1, 1].grid(True, alpha=0.3)
         
-        report += "\n## Cost Breakdown\n"
-        
-        if 'cost_breakdown' in predictions:
-            cost_df = pd.DataFrame([predictions['cost_breakdown']])
-            report += cost_df.to_markdown(index=False) + "\n"
-        
-        report += "\n## Implementation Timeline\n"
-        
-        if 'timeline' in predictions:
-            for phase, details in predictions['timeline'].items():
-                report += f"""
-### {phase.replace('_', ' ').title()}
-- Duration: {details.get('duration_months', 0)} months
-- Start Date: {details.get('start_date', 'TBD')}
-- End Date: {details.get('end_date', 'TBD')}
-- Key Milestones: {', '.join(details.get('milestones', []))}
-"""
-        
-        report += f"\n## Confidence Scores\n"
-        confidence_df = pd.DataFrame([confidence_scores])
-        report += confidence_df.to_markdown(index=False) + "\n"
-        
-        report += "\n## Recommendations\n"
-        report += self._generate_implementation_recommendations(predictions)
+        plt.tight_layout()
         
         if save_path:
-            output_file = self.output_dir / save_path
-            output_file.write_text(report)
-            logger.info(f"Inference report saved to {output_file}")
+            plt.savefig(str(self.output_dir / save_path), dpi=300, bbox_inches='tight')
         
-        return report
+        return fig
     
-    def _generate_recommendations(self, test_results: Dict, 
-                                 country_metrics: Dict) -> str:
-        recommendations = "\n## Recommendations\n\n"
+    def plot_cost_breakdown(self, costs: Dict[str, float],
+                          save_path: Optional[str] = None) -> go.Figure:
+        categories = list(costs.keys())
+        values = list(costs.values())
         
-        # Check overall performance
-        if test_results.get('overall', {}).get('rmse', float('inf')) > 5.0:
-            recommendations += "- Consider collecting more training data to improve model accuracy\n"
+        fig = go.Figure(data=[
+            go.Bar(x=categories, y=values,
+                  text=[f'${v/1e6:.1f}M' for v in values],
+                  textposition='auto',
+                  marker_color='lightblue')
+        ])
         
-        if test_results.get('overall', {}).get('r2', 0) < 0.8:
-            recommendations += "- Model performance is below optimal threshold. Review feature engineering\n"
+        fig.update_layout(
+            title='Railway Construction Cost Breakdown',
+            xaxis_title='Cost Category',
+            yaxis_title='Cost (USD)',
+            showlegend=False
+        )
         
-        # Check country-specific issues
-        for country, metrics in country_metrics.items():
-            if metrics.get('route_metrics', {}).get('hausdorff_distance', 0) > 10:
-                recommendations += f"- Route prediction for {country} needs improvement\n"
+        if save_path:
+            fig.write_html(str(self.output_dir / save_path))
+        
+        return fig
+    
+    def create_interactive_map(self, gdf: gpd.GeoDataFrame,
+                             stations_df: Optional[pd.DataFrame] = None,
+                             save_path: Optional[str] = None) -> folium.Map:
+        # Get bounds
+        bounds = gdf.total_bounds
+        center = [(bounds[1] + bounds[3]) / 2, (bounds[0] + bounds[2]) / 2]
+        
+        # Create map
+        m = folium.Map(location=center, zoom_start=8)
+        
+        # Add railway lines
+        for idx, row in gdf.iterrows():
+            if row.geometry.geom_type == 'LineString':
+                coords = [[lat, lon] for lon, lat in row.geometry.coords]
+                
+                folium.PolyLine(
+                    coords,
+                    color='red' if 'predicted' in str(idx).lower() else 'blue',
+                    weight=3,
+                    opacity=0.8,
+                    popup=f"Line {idx}"
+                ).add_to(m)
+        
+        # Add stations
+        if stations_df is not None:
+            for _, station in stations_df.iterrows():
+                folium.CircleMarker(
+                    location=[station['lat'], station['lon']],
+                    radius=5,
+                    popup=f"{station.get('name', 'Station')}<br>Platforms: {station.get('platforms', 'N/A')}",
+                    color='green',
+                    fill=True,
+                    fillColor='lightgreen'
+                ).add_to(m)
+        
+        # Add plugins
+        plugins.Fullscreen().add_to(m)
+        plugins.MeasureControl().add_to(m)
+        
+        if save_path:
+            m.save(str(self.output_dir / save_path))
+        
+        return m
+    
+    def plot_confusion_matrix(self, y_true: np.ndarray, y_pred: np.ndarray,
+                            class_names: Optional[List[str]] = None,
+                            save_path: Optional[str] = None) -> plt.Figure:
+        from sklearn.metrics import confusion_matrix
+        
+        cm = confusion_matrix(y_true, y_pred)
+        
+        fig, ax = plt.subplots(figsize=(10, 8))
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
+                   xticklabels=class_names, yticklabels=class_names)
+        
+        ax.set_xlabel('Predicted')
+        ax.set_ylabel('Actual')
+        ax.set_title('Confusion Matrix')
+        
+        if save_path:
+            plt.savefig(str(self.output_dir / save_path), dpi=300, bbox_inches='tight')
+        
+        return fig
+    
+    def plot_feature_importance(self, feature_names: List[str],
+                              importance_scores: np.ndarray,
+                              top_k: int = 20,
+                              save_path: Optional[str] = None) -> plt.Figure:
+        # Sort by importance
+        indices = np.argsort(importance_scores)[-top_k:]
+        
+        fig, ax = plt.subplots(figsize=(10, 8))
+        
+        ax.barh(range(len(indices)), importance_scores[indices])
+        ax.set_yticks(range(len(indices)))
+        ax.set_yticklabels([feature_names[i] for i in indices])
+        ax.set_xlabel('Importance Score')
+        ax.set_title(f'Top {top_k} Most Important Features')
+        
+        plt.tight_layout()
+        
+        if save_path:
+            plt.savefig(str(self.output_dir / save_path), dpi=300, bbox_inches='tight')
+        
+        return fig
+    
+    def plot_timetable_heatmap(self, timetable: pd.DataFrame,
+                             save_path: Optional[str] = None) -> plt.Figure:
+        # Create hour x station matrix
+        if 'departure_time' in timetable.columns and 'station' in timetable.columns:
+            timetable['hour'] = pd.to_datetime(timetable['departure_time']).dt.hour
             
-            if metrics.get('cost_metrics', {}).get('cost_mape', 0) > 20:
-                recommendations += f"- Cost estimation for {country} has high error rate\n"
-        
-        return recommendations
+            pivot = timetable.pivot_table(
+                values='train_id' if 'train_id' in timetable.columns else 'departure_time',
+                index='station',
+                columns='hour',
+                aggfunc='count',
+                fill_value=0
+            )
+            
+            fig, ax = plt.subplots(figsize=(20, 10))
+            sns.heatmap(pivot, cmap='YlOrRd', annot=True, fmt='d', cbar_kws={'label': 'Number of Trains'})
+            
+            ax.set_xlabel('Hour of Day')
+            ax.set_ylabel('Station')
+            ax.set_title('Train Frequency Heatmap')
+            
+            plt.tight_layout()
+            
+            if save_path:
+                plt.savefig(str(self.output_dir / save_path), dpi=300, bbox_inches='tight')
+            
+            return fig
     
-    def _generate_implementation_recommendations(self, predictions: Dict) -> str:
-        recommendations = []
+    def plot_gradient_profile(self, route_coords: np.ndarray,
+                            elevations: np.ndarray,
+                            save_path: Optional[str] = None) -> go.Figure:
+        distances = np.cumsum(np.sqrt(np.sum(np.diff(route_coords, axis=0)**2, axis=1)))
+        distances = np.insert(distances, 0, 0)
         
-        if predictions.get('total_cost', 0) > 10e9:
-            recommendations.append("- Consider phased implementation due to high total cost")
+        gradients = np.diff(elevations) / np.diff(distances) * 100  # Percentage
         
-        if predictions.get('construction_years', 0) > 10:
-            recommendations.append("- Long construction timeline suggests need for interim solutions")
+        fig = go.Figure()
         
-        if predictions.get('tunnel_pct', 0) > 20:
-            recommendations.append("- High tunnel percentage requires specialized engineering expertise")
+        # Elevation profile
+        fig.add_trace(go.Scatter(
+            x=distances,
+            y=elevations,
+            mode='lines',
+            name='Elevation',
+            yaxis='y',
+            line=dict(color='blue', width=2)
+        ))
         
-        if predictions.get('num_stations', 0) / predictions.get('total_length_km', 1) < 0.1:
-            recommendations.append("- Consider adding more stations to improve accessibility")
+        # Gradient
+        fig.add_trace(go.Scatter(
+            x=distances[:-1],
+            y=gradients,
+            mode='lines',
+            name='Gradient (%)',
+            yaxis='y2',
+            line=dict(color='red', width=1)
+        ))
         
-        return '\n'.join(recommendations) if recommendations else "No specific concerns identified"
-    
-    def generate_comparison_report(self,
-                                  models: List[str],
-                                  results: Dict[str, Dict],
-                                  save_path: Optional[str] = None) -> str:
-        report = f"""
-# Model Comparison Report
-Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-
-## Models Compared
-{', '.join(models)}
-
-## Performance Comparison
-"""
-        
-        comparison_data = []
-        for model in models:
-            model_results = results.get(model, {})
-            comparison_data.append({
-                'Model': model,
-                'RMSE': model_results.get('rmse', 'N/A'),
-                'MAE': model_results.get('mae', 'N/A'),
-                'R²': model_results.get('r2', 'N/A'),
-                'Training Time (h)': model_results.get('training_time', 'N/A'),
-                'Inference Time (s)': model_results.get('inference_time', 'N/A')
-            })
-        
-        comparison_df = pd.DataFrame(comparison_data)
-        report += comparison_df.to_markdown(index=False) + "\n"
-        
-        # Determine best model
-        best_model = min(results.keys(), key=lambda x: results[x].get('rmse', float('inf')))
-        report += f"\n## Best Performing Model: {best_model}\n"
+        fig.update_layout(
+            title='Route Elevation and Gradient Profile',
+            xaxis_title='Distance (km)',
+            yaxis=dict(title='Elevation (m)', side='left'),
+            yaxis2=dict(title='Gradient (%)', side='right', overlaying='y'),
+            showlegend=True
+        )
         
         if save_path:
-            output_file = self.output_dir / save_path
-            output_file.write_text(report)
-            logger.info(f"Comparison report saved to {output_file}")
+            fig.write_html(str(self.output_dir / save_path))
         
-        return report
+        return fig

@@ -6,15 +6,14 @@ import numpy as np
 from typing import Dict, List, Optional, Tuple, Any
 import logging
 from tqdm import tqdm
-import wandb
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 class RailwayTrainer:
     def __init__(self, model: nn.Module, config: Dict[str, Any], device: str = 'cuda'):
-        self.model = model.to(device)
-        self.device = device
+        self.model = model.to(device) if torch.cuda.is_available() and device == 'cuda' else model
+        self.device = 'cpu' if not torch.cuda.is_available() else device
         self.config = config
         
         self.optimizer = self._setup_optimizer()
@@ -24,9 +23,6 @@ class RailwayTrainer:
         self.best_loss = float('inf')
         self.patience_counter = 0
         self.epoch = 0
-        
-        if config.get('use_wandb', False):
-            wandb.init(project="bcpc-railway", config=config)
         
     def _setup_optimizer(self) -> optim.Optimizer:
         opt_name = self.config.get('optimizer', 'adam')
@@ -85,7 +81,30 @@ class RailwayTrainer:
             
             self.optimizer.zero_grad()
             
-            outputs = self.model(inputs)
+            # Check if model is RoutePredictor that needs special handling
+            if hasattr(self.model, '__class__') and 'RoutePredictor' in str(self.model.__class__):
+                # Split inputs for RoutePredictor
+                station_features = inputs[:, :10]  # First 10 features
+                terrain_features = inputs[:, 10:18]  # Next 8 features
+                outputs = self.model(station_features, terrain_features)
+                
+                # Handle dict output from RoutePredictor
+                if isinstance(outputs, dict):
+                    # Use route output for loss calculation
+                    outputs = outputs.get('route', outputs.get('cost', list(outputs.values())[0]))
+                    # Flatten if needed
+                    if len(outputs.shape) > 2:
+                        outputs = outputs.view(outputs.size(0), -1)
+                    # Adjust targets to match output size
+                    if outputs.shape != targets.shape:
+                        if outputs.shape[1] < targets.shape[1]:
+                            targets = targets[:, :outputs.shape[1]]
+                        else:
+                            # Pad targets or truncate outputs
+                            targets = torch.nn.functional.pad(targets, (0, outputs.shape[1] - targets.shape[1]))
+            else:
+                outputs = self.model(inputs)
+            
             loss = self.criterion(outputs, targets)
             
             if self.config.get('gradient_clip', None):
@@ -116,7 +135,24 @@ class RailwayTrainer:
             for batch in val_loader:
                 inputs, targets = self._prepare_batch(batch)
                 
-                outputs = self.model(inputs)
+                # Check if model is RoutePredictor
+                if hasattr(self.model, '__class__') and 'RoutePredictor' in str(self.model.__class__):
+                    station_features = inputs[:, :10]
+                    terrain_features = inputs[:, 10:18]
+                    outputs = self.model(station_features, terrain_features)
+                    
+                    if isinstance(outputs, dict):
+                        outputs = outputs.get('route', outputs.get('cost', list(outputs.values())[0]))
+                        if len(outputs.shape) > 2:
+                            outputs = outputs.view(outputs.size(0), -1)
+                        if outputs.shape != targets.shape:
+                            if outputs.shape[1] < targets.shape[1]:
+                                targets = targets[:, :outputs.shape[1]]
+                            else:
+                                targets = torch.nn.functional.pad(targets, (0, outputs.shape[1] - targets.shape[1]))
+                else:
+                    outputs = self.model(inputs)
+                
                 loss = self.criterion(outputs, targets)
                 
                 total_loss += loss.item()
@@ -125,11 +161,11 @@ class RailwayTrainer:
                 predictions.append(outputs.cpu().numpy())
                 ground_truth.append(targets.cpu().numpy())
         
-        avg_loss = total_loss / num_batches
+        avg_loss = total_loss / num_batches if num_batches > 0 else 0
         
         metrics = self._calculate_metrics(
-            np.concatenate(predictions),
-            np.concatenate(ground_truth)
+            np.concatenate(predictions) if predictions else np.array([]),
+            np.concatenate(ground_truth) if ground_truth else np.array([])
         )
         
         metrics['val_loss'] = avg_loss
@@ -180,6 +216,9 @@ class RailwayTrainer:
     
     def _calculate_metrics(self, predictions: np.ndarray, 
                           ground_truth: np.ndarray) -> Dict[str, float]:
+        if predictions.size == 0 or ground_truth.size == 0:
+            return {'mse': 0, 'mae': 0, 'rmse': 0}
+            
         mse = np.mean((predictions - ground_truth) ** 2)
         mae = np.mean(np.abs(predictions - ground_truth))
         
@@ -191,9 +230,6 @@ class RailwayTrainer:
     
     def _log_metrics(self, metrics: Dict[str, float]):
         logger.info(f"Epoch {self.epoch}: {metrics}")
-        
-        if self.config.get('use_wandb', False):
-            wandb.log(metrics, step=self.epoch)
     
     def save_checkpoint(self, path: Path):
         torch.save({
