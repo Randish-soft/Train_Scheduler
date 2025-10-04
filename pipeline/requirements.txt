@@ -1,0 +1,118 @@
+# Core geospatial libraries
+osmnx==1.9.1
+geopandas==0.14.3
+shapely==2.0.2
+fiona==1.9.5
+pyproj==3.6.1
+
+# Data processing
+pandas==2.2.0
+numpy==1.26.3
+scipy==1.12.0
+
+# Visualization
+matplotlib==3.8.2
+folium==0.15.1
+plotly==5.18.0
+seaborn==0.13.2
+
+# Train-specific data processing
+gtfs-kit==6.1.0  # For processing GTFS (General Transit Feed Specification) data
+polyline==2.0.2  # For encoding/decoding train routes
+
+# Terrain and elevation data
+rasterio==1.3.9
+elevation==1.1.3
+earthpy==0.9.4
+
+# Population density and demographic data
+rasterstats==0.19.0
+xarray==2024.1.1
+netCDF4==1.6.5
+
+# Protected areas and environmental data
+owslib==0.30.0  # For accessing WMS/WFS services
+pyshp==2.3.1  # For reading shapefiles
+
+# Machine learning and modeling
+scikit-learn==1.4.0
+xgboost==2.0.3
+lightgbm==4.3.0
+joblib==1.3.2
+
+# API and web services
+requests==2.31.0
+aiohttp==3.9.3
+urllib3==2.2.0
+
+# Database support
+sqlalchemy==2.0.25
+geoalchemy2==0.14.3
+psycopg2-binary==2.9.9  # PostgreSQL adapter
+
+# Configuration and utilities
+python-dotenv==1.0.1
+pyyaml==6.0.1
+click==8.1.7  # CLI interface
+tqdm==4.66.1  # Progress bars
+colorama==0.4.6  # Colored terminal output
+
+# Time and scheduling
+python-dateutil==2.8.2
+pytz==2024.1
+timezonefinder==6.2.0
+
+# Data validation
+pydantic==2.5.3
+jsonschema==4.21.1
+
+# Testing (optional, but recommended)
+pytest==7.4.4
+pytest-cov==4.1.0
+pytest-mock==3.12.0
+
+# Development tools (optional)
+black==24.1.1  # Code formatting
+flake8==7.0.0  # Linting
+mypy==1.8.0  # Type checking
+ipython==8.20.0  # Interactive Python
+jupyter==1.0.0  # Jupyter notebooks
+
+# Caching and optimization
+diskcache==5.6.3
+redis==5.0.1  # If using Redis for caching
+
+# Logging and monitoring
+loguru==0.7.2
+structlog==24.1.0
+
+# Parallel processing
+multiprocessing-logging==0.3.4
+concurrent-log-handler==0.9.24
+
+# Geographic calculations
+haversine==2.8.1  # Calculate distances between coordinates
+geopy==2.4.1  # Geocoding and distance calculations
+h3==3.7.6  # Uber's H3 hexagonal hierarchical geospatial indexing
+
+# OpenStreetMap specific
+osmium==3.7.0  # For processing OSM data files
+imposm.parser==1.0.7  # Alternative OSM parser
+
+# File handling
+openpyxl==3.1.2  # Excel file support
+xlrd==2.0.1  # Legacy Excel support
+h5py==3.10.0  # HDF5 file support
+
+# Image processing (for satellite/terrain imagery)
+pillow==10.2.0
+opencv-python==4.9.0.80
+scikit-image==0.22.0
+
+# Documentation (optional)
+sphinx==7.2.6
+sphinx-rtd-theme==2.0.0
+
+# Performance monitoring (optional)
+memory-profiler==0.61.0
+line-profiler==4.1.2

@@ -36,3 +36,6 @@ python -m pipeline.cli full --config pipeline/config/belgium.example.yaml
 
 # Cleaning
 make clean
+
+#Pipeline (new)
+python run.py
